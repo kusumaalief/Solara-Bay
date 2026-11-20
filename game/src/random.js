@@ -1,6 +1,8 @@
-// A small seeded random generator (xorshift32) for Solara Bay 3D: the same
+// A small seeded random generator (xorshift32) for Solara Bay v2: the same
 // seed gives the same city, traffic colours and pedestrian outfits, which is
 // what makes the screenshot scenes repeatable. State is one 32-bit word.
+// v2 adds shuffle, weighted picks and stable ids, used for the crowd, the
+// race checkpoints and the taxi fares.
 export function createRandom(seed) {
   let state = (seed | 0) || 0x9e3779b9;
   if (state === 0) state = 0x2545f491;
@@ -18,4 +20,31 @@ export function pick(random, list) {
 
 export function range(random, min, max) {
   return min + random() * (max - min);
+}
+
+export function shuffle(random, list) {
+  const out = list.slice();
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    const tmp = out[i];
+    out[i] = out[j];
+    out[j] = tmp;
+  }
+  return out;
+}
+
+export function weightedPick(random, entries) {
+  // entries: [[weight, value], ...]. Returns a value, weighted by weight.
+  let total = 0;
+  for (const [w] of entries) total += w;
+  let roll = random() * total;
+  for (const [w, value] of entries) {
+    roll -= w;
+    if (roll <= 0) return value;
+  }
+  return entries[entries.length - 1][1];
+}
+
+export function nextId(random) {
+  return Math.floor(random() * 1e9);
 }

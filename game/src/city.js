@@ -1,6 +1,10 @@
-// Solara Bay 3D map: a road grid, the blocks between the roads, and the
+// Solara Bay v2 map: a road grid, the blocks between the roads, and the
 // named places missions point at. Buildings are solid boxes; the beach runs
-// along the south edge and the marina sits in the south-east.
+// along the south edge and the marina sits in the south-east. v2 adds a
+// second district — the Harbor District in the north-west, with its own
+// taller, harbour-coloured towers — plus a beach promenade, a lighthouse,
+// a pier, palm trees, street lamps, benches and billboards, so the city
+// reads as two places, not one repeated grid.
 // Coordinates: x east (0..640), z south (0..480), y up. Roads are 14 wide.
 import { PALETTE, WORLD } from './config.js';
 import { pick, range } from './random.js';
@@ -29,6 +33,7 @@ export function createCity(random) {
   const buildings = [];
   const trees = [];
   const parks = [];
+  const props = [];
   for (let ix = 0; ix < VERTICAL_ROADS.length - 1; ix += 1) {
     for (let iy = 0; iy < HORIZONTAL_ROADS.length - 1; iy += 1) {
       const x0 = VERTICAL_ROADS[ix] + ROAD_WIDTH / 2 + 4;
@@ -37,6 +42,9 @@ export function createCity(random) {
       const z1 = HORIZONTAL_ROADS[iy + 1] - ROAD_WIDTH / 2 - 4;
       const cx = (x0 + x1) / 2;
       const cz = (z0 + z1) / 2;
+      // The Harbor District: the north-west blocks (ix 0..1, iy 0..1) get
+      // taller towers in harbour colours — a second district, not a repeat.
+      const harbor = ix <= 1 && iy <= 1;
       if (ix === 3 && iy === 2) {
         parks.push({ x: x0, z: z0, width: x1 - x0, depth: z1 - z0 });
         for (let t = 0; t < 12; t += 1) {
@@ -45,16 +53,37 @@ export function createCity(random) {
         continue;
       }
       if (cz > 430) continue;
-      const w = range(random, 18, 34);
-      const d = range(random, 14, 26);
+      const w = harbor ? range(random, 24, 36) : range(random, 18, 34);
+      const d = harbor ? range(random, 20, 30) : range(random, 14, 26);
       buildings.push({
         x: cx - w / 2, z: cz - d / 2, width: w, depth: d,
-        height: range(random, 8, 30),
-        color: pick(random, PALETTE.roofs),
+        height: harbor ? range(random, 22, 42) : range(random, 8, 30),
+        color: pick(random, harbor ? PALETTE.harborRoofs : PALETTE.roofs),
+        harbor,
       });
       if (random() < 0.5) trees.push({ x: range(random, x0, x1), z: range(random, z0, z1), h: range(random, 3, 5) });
     }
   }
+  // Beach promenade: palms, lamps and benches along the sand (z ~ 448-462).
+  for (let x = 30; x < WORLD.width - 20; x += 40) {
+    props.push({ kind: 'palm', x, z: 452, h: range(random, 4, 6) });
+    props.push({ kind: 'lamp', x: x + 20, z: 448 });
+    if (random() < 0.6) props.push({ kind: 'bench', x: x + 10, z: 456 });
+  }
+  // Street lamps at every other intersection, billboards on two plazas.
+  for (const rx of VERTICAL_ROADS) {
+    for (const rz of HORIZONTAL_ROADS) {
+      if ((rx + rz) % 160 === 0) props.push({ kind: 'lamp', x: rx + 9, z: rz + 9 });
+    }
+  }
+  props.push({ kind: 'sign', x: 280, z: 188, text: 'SOLARA', color: 0xffd23a });
+  props.push({ kind: 'sign', x: 120, z: 108, text: 'HARBOR', color: 0x4fc3f7 });
+  props.push({ kind: 'sign', x: 580, z: 408, text: 'DOCKS', color: 0xe5534b });
+  // Lighthouse and pier at the south-east marina.
+  props.push({ kind: 'lighthouse', x: 612, z: 470 });
+  props.push({ kind: 'pier', x: 560, z: 468 });
+  props.push({ kind: 'pier', x: 580, z: 468 });
+
   const places = {
     start: { x: 280, z: 200, name: 'Solara Plaza' },
     docks: { x: 580, z: 420, name: 'Docks' },
@@ -62,8 +91,21 @@ export function createCity(random) {
     safehouse: { x: 120, z: 360, name: 'Safehouse' },
     hospital: { x: 440, z: 200, name: 'Bay Hospital' },
     beach: { x: 280, z: 465, name: 'Solara Beach' },
+    harbor: { x: 80, z: 80, name: 'Harbor District' },
+    garage: { x: 120, z: 80, name: 'Harbor Garage' },
+    cabana: { x: 320, z: 462, name: 'Beach Cabana' },
+    taxiStand: { x: 360, z: 200, name: 'Taxi Stand' },
+    taxiStand2: { x: 200, z: 360, name: 'Taxi Stand' },
+    taxiStand3: { x: 520, z: 120, name: 'Taxi Stand' },
   };
-  return { buildings, trees, parks, places, width: WORLD.width, height: WORLD.height };
+  // Race checkpoints ring the harbor and the beach.
+  const racePoints = [
+    { x: 120, z: 80, name: 'Harbor Gate' },
+    { x: 520, z: 120, name: 'North Shops' },
+    { x: 580, z: 420, name: 'Docks Turn' },
+    { x: 280, z: 462, name: 'Beach Finish' },
+  ];
+  return { buildings, trees, parks, props, places, racePoints, width: WORLD.width, height: WORLD.height };
 }
 
 export function buildingAt(city, x, z, radius) {

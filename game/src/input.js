@@ -1,7 +1,10 @@
-// Keyboard and mouse input for Solara Bay 3D.
+// Keyboard and mouse input for Solara Bay v2.
 // Held keys give a move vector; one-shot presses (start, pause, enter a car,
-// interact, punch, save, mute) are queued as bit flags and taken once by the
-// loop. Dragging the mouse orbits the third-person camera; a click fires.
+// interact, punch, save, mute, horn, restart, camera reset) are queued as
+// bit flags and taken once by the loop. Dragging the mouse orbits the
+// third-person camera; a click fires. Arrow keys work alongside WASD, and
+// the game also listens for touch drags through pointer events, so the same
+// camera drag works on a touch screen.
 export const ACTION_CONFIRM = 1;
 export const ACTION_PAUSE = 2;
 export const ACTION_ENTER = 4;
@@ -10,6 +13,9 @@ export const ACTION_PUNCH = 16;
 export const ACTION_SAVE = 32;
 export const ACTION_MUTE = 64;
 export const ACTION_JUMP = 128;
+export const ACTION_HORN = 256;
+export const ACTION_RESTART = 512;
+export const ACTION_CAMERA = 1024;
 
 const UP = new Set(['ArrowUp', 'KeyW']);
 const DOWN = new Set(['ArrowDown', 'KeyS']);
@@ -23,6 +29,9 @@ const PUNCH = new Set(['KeyQ']);
 const SAVE = new Set(['KeyC']);
 const MUTE = new Set(['KeyM']);
 const JUMP = new Set(['Space']);
+const HORN = new Set(['KeyH']);
+const RESTART = new Set(['KeyR']);
+const CAMERA = new Set(['KeyV']);
 
 export function createInput(canvas) {
   const keys = new Set();
@@ -34,6 +43,7 @@ export function createInput(canvas) {
   let clicked = false;
   let lastX = 0;
   let lastY = 0;
+  let activePointer = null;
 
   window.addEventListener('keydown', (event) => {
     if (event.code === 'ShiftLeft' || event.code === 'ShiftRight') shift = true;
@@ -45,6 +55,9 @@ export function createInput(canvas) {
     else if (PUNCH.has(event.code)) { if (!event.repeat) actions |= ACTION_PUNCH; }
     else if (SAVE.has(event.code)) { if (!event.repeat) actions |= ACTION_SAVE; }
     else if (MUTE.has(event.code)) { if (!event.repeat) actions |= ACTION_MUTE; }
+    else if (HORN.has(event.code)) { if (!event.repeat) actions |= ACTION_HORN; }
+    else if (RESTART.has(event.code)) { if (!event.repeat) actions |= ACTION_RESTART; }
+    else if (CAMERA.has(event.code)) { if (!event.repeat) actions |= ACTION_CAMERA; }
     else if (JUMP.has(event.code)) { if (!event.repeat) actions |= ACTION_JUMP; }
     else return;
     event.preventDefault();
@@ -53,18 +66,23 @@ export function createInput(canvas) {
     if (event.code === 'ShiftLeft' || event.code === 'ShiftRight') shift = false;
     keys.delete(event.code);
   });
-  window.addEventListener('blur', () => { keys.clear(); shift = false; mouseDown = false; });
+  window.addEventListener('blur', () => { keys.clear(); shift = false; mouseDown = false; activePointer = null; });
   canvas.addEventListener('pointerdown', (event) => {
     mouseDown = true; clicked = true; lastX = event.clientX; lastY = event.clientY;
+    activePointer = event.pointerId;
     actions |= ACTION_CONFIRM;
   });
   window.addEventListener('pointermove', (event) => {
-    if (!mouseDown) return;
+    if (!mouseDown || (activePointer !== null && event.pointerId !== activePointer)) return;
     yawDelta -= (event.clientX - lastX) * 0.005;
     pitchDelta += (event.clientY - lastY) * 0.004;
     lastX = event.clientX; lastY = event.clientY;
   });
-  window.addEventListener('pointerup', () => { mouseDown = false; });
+  window.addEventListener('pointerup', (event) => {
+    if (activePointer !== null && event.pointerId !== activePointer) return;
+    mouseDown = false;
+    activePointer = null;
+  });
 
   function axis(setA, setB) {
     let v = 0;

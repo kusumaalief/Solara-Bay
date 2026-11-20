@@ -2,6 +2,9 @@
 // locally without a build step: `node serve.ts` serves game/ on http://localhost:8080.
 // It sends the MIME types a browser game needs, refuses any path outside game/, and otherwise
 // does nothing clever: this is a development convenience, not a web server for the internet.
+// v2 adds: a /health endpoint for play-test scripts, HEAD support, request
+// logging to stderr, and security headers (no MIME sniffing, no framing).
+// Usage: node serve.ts [--port 8080]
 import { createReadStream, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
@@ -37,8 +40,18 @@ const MIME: Record<string, string> = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
+const startedAt = Date.now();
+
 createServer((request, response) => {
+  const method = request.method ?? 'GET';
   const url = new URL(request.url ?? '/', 'http://localhost');
+  // /health is for play-test scripts: it answers without touching game/.
+  if (url.pathname === '/health') {
+    const body = JSON.stringify({ ok: true, uptime_s: Math.floor((Date.now() - startedAt) / 1000) });
+    response.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'content-length': Buffer.byteLength(body) });
+    response.end(body);
+    return;
+  }
   let pathname: string;
   try {
     pathname = decodeURIComponent(url.pathname);
@@ -61,11 +74,19 @@ createServer((request, response) => {
     response.writeHead(404).end('not found');
     return;
   }
-  response.writeHead(200, {
+  console.error(`${new Date().toISOString()} ${method} ${url.pathname} 200 ${size}B`);
+  const headers: Record<string, string> = {
     'content-type': MIME[extname(file).toLowerCase()] ?? 'application/octet-stream',
-    'content-length': size,
+    'content-length': String(size),
     'cache-control': 'no-store',
-  });
+    'x-content-type-options': 'nosniff',
+    'x-frame-options': 'SAMEORIGIN',
+  };
+  if (method === 'HEAD') {
+    response.writeHead(200, headers).end();
+    return;
+  }
+  response.writeHead(200, headers);
   createReadStream(file).pipe(response);
 }).listen(port, '127.0.0.1', () => {
   console.log(`game/ is on http://localhost:${port}`);
