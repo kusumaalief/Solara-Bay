@@ -7,7 +7,7 @@
 // reads as two places, not one repeated grid.
 // Coordinates: x east (0..640), z south (0..480), y up. Roads are 14 wide.
 import { PALETTE, WORLD } from './config.js';
-import { chance, intRange, pick, range } from './random.js';
+import { chance, intRange, pick, range, sample } from './random.js';
 
 export const ROAD_WIDTH = 14;
 export const VERTICAL_ROADS = [40, 120, 200, 280, 360, 440, 520, 600];
@@ -55,8 +55,9 @@ export function createCity(random) {
       if (cz > 430) continue;
       // v3: three blocks are reserved for hand-placed landmarks — Marin's
       // Armory, the Vinyl Bay music store and the Violet Towers — so the
-      // random tower never lands on top of them.
-      if ((ix === 2 && iy === 1) || (ix === 4 && iy === 1) || (ix === 1 && iy === 0)) continue;
+      // random tower never lands on top of them. v4 reserves a fourth for
+      // Comet Motors, the dealership where Leo's Comet 01 lives.
+      if ((ix === 2 && iy === 1) || (ix === 4 && iy === 1) || (ix === 1 && iy === 0) || (ix === 3 && iy === 1)) continue;
       const w = harbor ? range(random, 24, 36) : range(random, 18, 34);
       const d = harbor ? range(random, 20, 30) : range(random, 14, 26);
       buildings.push({
@@ -76,6 +77,9 @@ export function createCity(random) {
     { x: 215, z: 140, width: 26, depth: 18, height: 10, color: PALETTE.armory, kind: 'armory' },
     { x: 380, z: 140, width: 30, depth: 20, height: 12, color: PALETTE.musicStore, kind: 'musicstore', facade: 'textures/facade-orange.jpg' },
     { x: 150, z: 60, width: 20, depth: 16, height: 38, color: PALETTE.violetTower, kind: 'tower', facade: 'textures/facade-violet.jpg' },
+    // v4: Comet Motors, the dealership for Leo's orange Comet 01 — a low
+    // showroom on the block south-east of the plaza, with a forecourt.
+    { x: 300, z: 140, width: 30, depth: 18, height: 8, color: 0xe5534b, kind: 'dealership' },
   );
   // Record Row: a small plaza in front of the music store — a kiosk, a
   // food cart, benches and planters, and market stalls in the block below.
@@ -131,6 +135,12 @@ export function createCity(random) {
     armory: { x: 228, z: 164, name: "Marin's Armory" },
     musicstore: { x: 395, z: 166, name: 'Vinyl Bay Records' },
     recordrow: { x: 395, z: 190, name: 'Record Row' },
+    // v4: Comet Motors — the dealership showroom, and two forecourt spots
+    // (picked from four, so the stock sits somewhere different each seed).
+    dealership: { x: 315, z: 158, name: 'Comet Motors' },
+    dealershipSpots: sample(random, [
+      { x: 306, z: 168 }, { x: 318, z: 168 }, { x: 330, z: 168 }, { x: 342, z: 168 },
+    ], 2),
   };
   // Race checkpoints ring the harbor and the beach.
   const racePoints = [

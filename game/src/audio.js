@@ -5,7 +5,9 @@
 // car's speed, a car horn, and distinct sounds for coins, taxi fares and
 // the race countdown. v3 adds a different gunshot for each gun (pistol
 // crack, shotgun boom, rifle snap), plus buy and reload sounds for the
-// armory.
+// armory. v4 adds: a different engine note for the real car models —
+// the Comet 01 revs a little higher than the blocky cars, the police
+// Interceptor sits lower — and a click for the headlight switch.
 export function createAudio() {
   let context = null;
   let muted = false;
@@ -86,7 +88,10 @@ export function createAudio() {
     if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
   }
 
-  function engine(speed, inCar) {
+  // v4: the engine note follows the car model — the Comet 01 (orange
+  // race car) revs higher, the police Interceptor growls lower, and the
+  // blocky cars keep the v2 note.
+  function engine(speed, inCar, model) {
     const ctx = ensure();
     if (!ctx || ctx.state === 'suspended') return;
     if (!inCar || muted) {
@@ -102,7 +107,8 @@ export function createAudio() {
         engineOsc.connect(engineGain).connect(ctx.destination);
         engineOsc.start();
       }
-      engineOsc.frequency.setValueAtTime(50 + Math.abs(speed) * 3.2, ctx.currentTime);
+      const base = model === 'comet' ? 62 : model === 'police' ? 44 : 50;
+      engineOsc.frequency.setValueAtTime(base + Math.abs(speed) * 3.2, ctx.currentTime);
       engineGain.gain.setValueAtTime(0.012 + Math.min(0.02, Math.abs(speed) * 0.0006), ctx.currentTime);
     } catch { /* sound is optional */ }
   }
@@ -128,6 +134,7 @@ export function createAudio() {
     coin() { tone(1318, 0.08, 'sine', 0.07); tone(1760, 0.16, 'sine', 0.06); },
     taxi() { tone(784, 0.1, 'sine', 0.08); tone(1046, 0.18, 'sine', 0.07); },
     horn() { tone(370, 0.25, 'square', 0.05); tone(466, 0.25, 'square', 0.04); },
+    click() { tone(1200, 0.04, 'square', 0.05); },
     raceStart() { tone(440, 0.12, 'square', 0.07); tone(440, 0.12, 'square', 0.07, null, 0.15); tone(880, 0.3, 'square', 0.08, null, 0.3); },
     mission() { tone(523, 0.12, 'sine', 0.09); tone(659, 0.12, 'sine', 0.09); tone(784, 0.22, 'sine', 0.09); },
     busted() { tone(220, 0.3, 'sawtooth', 0.08, 110); },

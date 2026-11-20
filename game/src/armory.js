@@ -3,7 +3,9 @@
 // reload bookkeeping the world simulation calls. The guns are original
 // (Bay Pistol, Boomstick shotgun, Harbor Rifle) and the armory itself is
 // an original shop run by Gus Ferraro, a new named character.
-import { WEAPONS } from './config.js';
+// v4 adds the shop subtitle: it names Leo's car (the orange Comet 01)
+// when he walks in, so the armory knows what he drove up in.
+import { CAR_MODELS, WEAPONS } from './config.js';
 
 export const WEAPON_ORDER = ['pistol', 'shotgun', 'rifle'];
 export const AMMO_PRICE = 40;
@@ -17,6 +19,14 @@ export function createWeaponState() {
 
 export function weaponStats(id) {
   return WEAPONS[id] || null;
+}
+
+// The armory door subtitle: Gus greets Leo by his car when he has one
+// parked nearby — the Comet 01 is the talk of the plaza.
+export function shopSubtitle(state) {
+  const parked = state.cars.find((c) => c.model === 'comet' && c.parked);
+  if (parked) return `Gus Ferraro is minding the counter. Nice ${CAR_MODELS.comet.label} out front — buy a gun, stock up on ammo, or equip what you own.`;
+  return 'Gus Ferraro is minding the counter. Buy a gun, stock up on ammo, or equip what you own.';
 }
 
 export function hasWeapon(state, id) {

@@ -5,6 +5,12 @@
 // v3 adds: Marin's Armory (a gun shop run by Gus Ferraro) with three
 // buyable guns, a music store and a new tower district inspired by the
 // free-to-use city street pack, and a Record Row plaza.
+// v4 adds: real low-poly car models — the Comet 01 (Leo's car, every
+// stealable sedan) and the Interceptor (every police car), converted from
+// the free-to-use low-poly cars pack the entrant supplied. CAR_MODELS
+// holds their file paths, HUD labels and the wheel/light geometry the
+// renderer needs; the GLBs live under game/models/, the PNG textures
+// under game/textures/.
 export const WORLD = { width: 640, height: 480 };
 export const STEP = 1 / 60;
 export const SAVE_KEY = 'solara-bay-3d.save.v3';
@@ -34,6 +40,17 @@ export const ARMORY = {
   door: { x: 228, z: 164 },
   interactRange: 8,
   blurb: 'Gus Ferraro sells hardware to anyone with cash and a steady hand.',
+};
+
+// Real car models (v4): which GLB/texture each model uses, what the HUD
+// calls it, the wheel radius the renderer spins the wheels by, where the
+// headlight blocks sit at the front, and (police only) how high the roof
+// light bar sits. The GLBs are baked at the game's 4.6-unit sedan length
+// with the wheels touching y=0 and the front at +Z, so they drop straight
+// into the existing car slots — stats and handling stay in VEHICLES.
+export const CAR_MODELS = {
+  comet: { label: 'Comet 01', glb: 'models/car1.glb', texture: 'textures/car-1.png', wheelRadius: 0.36, headlightY: 0.55 },
+  police: { label: 'Interceptor', glb: 'models/car2.glb', texture: 'textures/car-2.png', wheelRadius: 0.37, headlightY: 0.6, lightBarY: 1.78 },
 };
 
 // Vehicle types: every drivable car in the city uses one of these rows, so a

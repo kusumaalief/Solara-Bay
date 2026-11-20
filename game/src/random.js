@@ -55,6 +55,12 @@ export function chance(random, p) {
   return random() < p;
 }
 
+// v4: pick n distinct items from a list, in a shuffled order — the
+// dealership forecourt uses it to choose two of its four stock spots.
+export function sample(random, list, n) {
+  return shuffle(random, list).slice(0, Math.min(n, list.length));
+}
+
 export function nextId(random) {
   return Math.floor(random() * 1e9);
 }

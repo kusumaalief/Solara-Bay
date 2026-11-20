@@ -1,4 +1,4 @@
-// Screenshot scenes for Solara Bay v3: ?shot=chase|drive|mission|armory
+// Screenshot scenes for Solara Bay v4: ?shot=chase|drive|mission|armory
 // (with &seed=N). Each one sets the real world to a fixed, readable scene,
 // then the main loop paints it and sets window.__shotReady. Every scene
 // shows several systems at once — HUD, minimap, wanted stars, a mission
@@ -7,7 +7,9 @@
 // the fourth frame is Leo outside Marin's Armory, rifle in hand, a tracer
 // in the air and a police officer closing in. No autopilot drives the game
 // here: the scenes are staged positions, so the same seed always gives the
-// same frame.
+// same frame. v4: the chase and drive scenes put Leo in his orange Comet
+// 01 (the real low-poly model) and the chase shows three police
+// Interceptors, so both new cars are on screen in the entry shots.
 import { SCREEN_PLAY } from './render.js';
 
 function putPlayerInCar(state, x, z, heading, vtype) {
@@ -18,9 +20,15 @@ function putPlayerInCar(state, x, z, heading, vtype) {
   car.z = z;
   car.heading = heading;
   car.speed = 22;
+  if (vtype) {
+    car.vtype = vtype;
+    // Keep the model in step with the type: a sedan is the Comet 01, a
+    // police car stays the Interceptor, anything else is blocky. (Check
+    // the kind before it becomes 'player' below.)
+    car.model = car.kind === 'police' ? 'police' : (vtype === 'sedan' ? 'comet' : null);
+  }
   car.kind = 'player';
   car.parked = false;
-  if (vtype) car.vtype = vtype;
   state.player.inCar = car;
   state.player.x = x;
   state.player.z = z;
@@ -32,6 +40,7 @@ function addTrafficCar(state, x, z, heading, speed, vtype, color) {
   const car = {
     id: Math.floor(Math.random() * 1e9) + Math.floor(x * 10) + 7,
     x, z, heading, speed, color: color ?? 0xd86a2c, kind: 'traffic', vtype: vtype || 'sedan',
+    model: (vtype || 'sedan') === 'sedan' ? 'comet' : null,
     parked: false, axis: 'x', dir: 1, cruise: speed,
   };
   state.cars.push(car);
@@ -41,6 +50,7 @@ function addPoliceCar(state, x, z, heading) {
   const car = {
     id: Math.floor(Math.random() * 1e9) + Math.floor(x * 10),
     x, z, heading, speed: 20, color: 0x2b4acb, kind: 'police', vtype: 'sedan',
+    model: 'police',
     parked: false, axis: 'x', dir: 1, cruise: 20,
   };
   state.cars.push(car);
@@ -112,7 +122,9 @@ export function stageShot(name, world) {
     return { screen: SCREEN_PLAY, dusk: true, cameraYaw: Math.PI };
   }
   if (name === 'chase') {
-    putPlayerInCar(state, 280, 200, Math.PI / 2, 'sports');
+    // Leo in his orange Comet 01, three police Interceptors closing in —
+    // both v4 models in one frame, with a truck in traffic beside them.
+    putPlayerInCar(state, 280, 200, Math.PI / 2, 'sedan');
     state.wanted = 4;
     state.missionIndex = 0;
     state.missionStage = 1;
@@ -129,8 +141,7 @@ export function stageShot(name, world) {
     state.message = 'Police chase! Lose the heat — wanted ★★★★☆';
     state.messageTimer = 10;
     return { screen: SCREEN_PLAY, dusk: false, cameraYaw: -Math.PI / 2 };
-  }
-  if (name === 'mission') {
+  }  if (name === 'mission') {
     // Leo faces north toward Marina Bank (200, 120); the camera sits behind
     // him to the south, so the bank, its marker beam and Mara are in frame.
     state.player.x = 200;
@@ -149,9 +160,9 @@ export function stageShot(name, world) {
     state.messageTimer = 10;
     return { screen: SCREEN_PLAY, dusk: false, cameraYaw: 0 };
   }
-  // drive (default): a sports car through the Harbor District, with a truck
-  // and a motorcycle in traffic and a courier drop on the HUD.
-  putPlayerInCar(state, 360, 120, Math.PI / 2, 'sports');
+  // drive (default): Leo's orange Comet 01 through the Harbor District,
+  // with a truck and a motorcycle in traffic and a courier drop on the HUD.
+  putPlayerInCar(state, 360, 120, Math.PI / 2, 'sedan');
   state.wanted = 0;
   state.missionIndex = 1;
   state.missionStage = 0;
@@ -162,7 +173,7 @@ export function stageShot(name, world) {
   addTrafficCar(state, 405, 124, Math.PI / 2, 12, 'bike', 0x2b2f38);
   addTrafficCar(state, 430, 116, Math.PI / 2, 11, 'sedan', 0x4fc3f7);
   addPedestrian(state, 372, 132, -Math.PI / 2, 0xe8a13a, null);
-  state.message = 'Driving the Comet through the Harbor District';
+  state.message = 'Driving the Comet 01 through the Harbor District';
   state.messageTimer = 10;
   return { screen: SCREEN_PLAY, dusk: false, cameraYaw: -Math.PI / 2 };
 }

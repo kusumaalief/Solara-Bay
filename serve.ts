@@ -6,6 +6,9 @@
 // logging to stderr, and security headers (no MIME sniffing, no framing).
 // v3 adds: a version header on every response, and /health now reports the
 // game version and how many texture files are being served.
+// v4 adds: /health also reports how many car models are served, and the
+// texture count now includes the PNG car textures (the .glb MIME type was
+// already there).
 // Usage: node serve.ts [--port 8080]
 import { createReadStream, readdirSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -43,10 +46,15 @@ const MIME: Record<string, string> = {
 };
 
 const startedAt = Date.now();
-const GAME_VERSION = 'solara-bay-v3';
+const GAME_VERSION = 'solara-bay-v4';
 
 function textureCount() {
-  try { return readdirSync(join(root, 'textures')).filter((f) => f.endsWith('.jpg')).length; }
+  try { return readdirSync(join(root, 'textures')).filter((f) => f.endsWith('.jpg') || f.endsWith('.png')).length; }
+  catch { return 0; }
+}
+
+function modelCount() {
+  try { return readdirSync(join(root, 'models')).filter((f) => f.endsWith('.glb')).length; }
   catch { return 0; }
 }
 
@@ -55,7 +63,7 @@ createServer((request, response) => {
   const url = new URL(request.url ?? '/', 'http://localhost');
   // /health is for play-test scripts: it answers without touching game/.
   if (url.pathname === '/health') {
-    const body = JSON.stringify({ ok: true, version: GAME_VERSION, textures: textureCount(), uptime_s: Math.floor((Date.now() - startedAt) / 1000) });
+    const body = JSON.stringify({ ok: true, version: GAME_VERSION, textures: textureCount(), models: modelCount(), uptime_s: Math.floor((Date.now() - startedAt) / 1000) });
     response.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'content-length': Buffer.byteLength(body) });
     response.end(body);
     return;

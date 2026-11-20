@@ -31,7 +31,7 @@
   #message { position: absolute; left: 50%; bottom: 240px; transform: translateX(-50%); font-size: 19px; font-weight: 700; color: #ffd23a; text-shadow: 0 2px 4px #000; text-align: center; max-width: 720px; }
   #speed { position: absolute; right: 18px; bottom: 16px; font-size: 26px; font-weight: 800; text-shadow: 0 2px 4px #000; }
   #vehicle { position: absolute; right: 18px; bottom: 50px; font-size: 15px; font-weight: 700; color: #c8cfdb; text-shadow: 0 1px 3px #000; }
-  #hint { position: absolute; left: 14px; bottom: 14px; font-size: 14px; font-weight: 600; color: #eef1f5; text-shadow: 0 1px 3px #000; background: rgba(10,14,24,0.55); padding: 6px 10px; border-radius: 8px; }
+  #hint { position: absolute; left: 14px; bottom: 14px; max-width: 68%; font-size: 14px; font-weight: 600; color: #eef1f5; text-shadow: 0 1px 3px #000; background: rgba(10,14,24,0.55); padding: 6px 10px; border-radius: 8px; }
   #weapon { position: absolute; left: 14px; bottom: 52px; font-size: 17px; font-weight: 800; color: #ffd23a; text-shadow: 0 1px 3px #000; background: rgba(10,14,24,0.65); padding: 7px 12px; border-radius: 8px; border: 1px solid rgba(255,210,58,0.35); }
   #weapon .ammo { color: #eef1f5; }
   #weapon .reload { color: #ff7a6b; }
@@ -73,11 +73,11 @@
   #overlay-card button.secondary { background: #2b3446; color: #eef1f5; border: 1px solid rgba(255,255,255,0.3); }
 </style>
 <script type="importmap">
-{ "imports": { "three": "./vendor/three.module.min.js" } }
+{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/" } }
 </script>
 </head>
 <body>
-<canvas id="game" aria-label="Solara Bay: a blocky open-world crime game. Move with WASD, drive cars, complete missions."></canvas>
+<canvas id="game" aria-label="Solara Bay: a blocky open-world crime game with real low-poly cars. Move with WASD, drive cars, complete missions."></canvas>
 <p id="status" role="status" aria-live="polite"></p>
 <div id="damage-flash"></div>
 <div id="hud">
@@ -89,7 +89,7 @@
   <div id="vehicle"></div>
   <div id="speed"></div>
   <div id="weapon">NO GUN — visit Marin's Armory</div>
-  <div id="hint">WASD move/drive · E enter car · F interact · Click shoot · Q punch · Space jump · H horn · R restart · V camera · P pause · C save · T reload · 1/2/3 guns · Tab weapons</div>
+  <div id="hint">WASD move/drive · E enter car · F interact · Click shoot · Q punch · Space jump · H horn · L headlights · R restart · V camera · P pause · C save · T reload · 1/2/3 guns · Tab weapons</div>
   <div id="crosshair">+</div>
 </div>
 <div id="armory" class="hidden"><div id="armory-card">

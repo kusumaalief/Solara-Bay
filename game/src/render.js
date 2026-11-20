@@ -6,8 +6,14 @@
 // kiosk, food cart, market stalls and a neon-skyline billboard, the gun
 // Leo is holding (one blocky model per weapon, with a muzzle flash), and
 // tracer-coloured bullets. Everything is local under game/ — no network.
+// v4 adds the real low-poly car models: Leo's Comet 01 (every sedan) and
+// the police Interceptor (every police car), loaded from game/models/ by
+// cars.js. Until a model is ready its slot keeps the v3 blocky car and
+// swaps in on the next frame; model wheels spin with speed, the front pair
+// steers, and the police bar flashes red/blue like the blocky one did.
 import * as THREE from 'three';
 import { PALETTE, WEAPONS, WORLD } from './config.js';
+import { carModelReady, loadCarModels, makeModelCar, updateModelCar } from './cars.js';
 import { HORIZONTAL_ROADS, ROAD_WIDTH, VERTICAL_ROADS } from './city.js';
 
 // v3 textures, from the free-to-use city street pack the entrant supplied:
@@ -413,6 +419,16 @@ export function createRenderer(canvas) {
         sign.position.set(b.x + b.width / 2, b.height + 1.2, b.z + b.depth + 0.1);
         cityMeshes.add(sign);
       }
+      // Comet Motors (v4): the dealership where Leo's orange Comet 01
+      // lives — a yellow canvas sign over the showroom door.
+      if (b.kind === 'dealership') {
+        const sign = new THREE.Mesh(
+          new THREE.PlaneGeometry(16, 4),
+          new THREE.MeshBasicMaterial({ map: makeSignTexture(['COMET MOTORS', 'LEO\'S 01 • SALES • SERVICE'], '#e5534b', '#ffffff') }),
+        );
+        sign.position.set(b.x + b.width / 2, b.height + 1.2, b.z + b.depth + 0.1);
+        cityMeshes.add(sign);
+      }
       // Rooftop detail: a water tank on the taller towers.
       if (b.height > 24) {
         const tank = new THREE.Mesh(
@@ -677,18 +693,28 @@ export function createRenderer(canvas) {
       if (!seenNpcs.has(id)) { scene.remove(mesh); npcMeshes.delete(id); }
     }
 
-    // Cars
+    // Cars — v4: a sedan or a police car uses its real low-poly model
+    // once it has loaded, and falls back to the blocky car until then. A
+    // mesh built one way is rebuilt the other way if the model's readiness
+    // changes, so a late load still swaps the model in mid-game.
     const seenCars = new Set();
     for (const car of state.cars) {
       seenCars.add(car.id);
+      const wantModel = !!car.model && carModelReady(car.model);
       let mesh = carMeshes.get(car.id);
+      if (mesh && !!mesh.userData.isModel !== wantModel) {
+        scene.remove(mesh);
+        carMeshes.delete(car.id);
+        mesh = null;
+      }
       if (!mesh) {
-        mesh = makeCarMesh(car.color, car.kind, car.vtype);
+        mesh = wantModel ? makeModelCar(car.model) : makeCarMesh(car.color, car.kind, car.vtype);
         scene.add(mesh);
         carMeshes.set(car.id, mesh);
       }
       mesh.position.set(car.x, 0, car.z);
       mesh.rotation.y = car.heading;
+      if (mesh.userData.isModel) updateModelCar(mesh, car, 1 / 60, state.headlights);
       if (car.kind === 'police' && mesh.userData.policeLights) {
         const on = Math.floor(time * 4) % 2 === 0;
         mesh.userData.policeLights.red.material.color.setHex(on ? 0xff3b30 : 0x551111);
@@ -864,6 +890,11 @@ export function createRenderer(canvas) {
       ctx.font = 'bold 8px system-ui, sans-serif';
       ctx.fillText('A', state.city.places.armory.x * sx - 3, state.city.places.armory.z * sz + 3);
     }
+    // Comet Motors dealership (v4): an orange square where Leo's car lives.
+    if (state.city.places.dealership) {
+      ctx.fillStyle = '#e5534b';
+      ctx.fillRect(state.city.places.dealership.x * sx - 3, state.city.places.dealership.z * sz - 3, 6, 6);
+    }
     if (state.city.places.musicstore) {
       ctx.fillStyle = '#c98af2';
       ctx.fillRect(state.city.places.musicstore.x * sx - 3, state.city.places.musicstore.z * sz - 3, 6, 6);
@@ -900,5 +931,18 @@ export function createRenderer(canvas) {
 
   resize();
   window.addEventListener('resize', resize);
-  return { draw, drawMinimap, resize };
+  // Start the real car models loading as soon as the renderer exists, so
+  // they are usually ready by the time Leo gets in a car (main.js also
+  // awaits them for screenshot scenes).
+  loadCarModels();
+  // Debug hook for play-testing: which cars are model cars, and how far
+  // their wheels have spun / steered (read-only state inspection).
+  function debugCars() {
+    return [...carMeshes].map(([id, m]) => ({
+      id, isModel: !!m.userData.isModel, model: m.userData.modelId || null,
+      spin: m.userData.spin || 0, steer: m.userData.steer || 0,
+      policeLights: !!m.userData.policeLights,
+    }));
+  }
+  return { draw, drawMinimap, resize, debugCars };
 }

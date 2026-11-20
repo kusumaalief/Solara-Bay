@@ -8,7 +8,7 @@
 // where Leo is heading, and the wanted level only cools off while Leo is
 // hidden from the police). step() advances one fixed step and returns what
 // happened as flags.
-import { ARMORY, CHARACTERS, COLLECTIBLES, CROWD, MISSIONS, PALETTE, PLAYER, POLICE, SAVE_KEY, TAXI, UNLOCKS, VEHICLES, WANTED, WEAPONS, WORLD } from './config.js';
+import { ARMORY, CAR_MODELS, CHARACTERS, COLLECTIBLES, CROWD, MISSIONS, PALETTE, PLAYER, POLICE, SAVE_KEY, TAXI, UNLOCKS, VEHICLES, WANTED, WEAPONS, WORLD } from './config.js';
 import { buyAmmo, buyWeapon, createWeaponState, equipWeapon, fireWeapon, finishReload, startReload } from './armory.js';
 import { buildingAt, clampToWorld, createCity, nearestRoadPoint, pushOutOfBuilding } from './city.js';
 import { nextId, pick, range, weightedPick } from './random.js';
@@ -88,6 +88,8 @@ export function createWorld(random) {
     weapons: createWeaponState(),
     armoryOpen: false,
     armoryHintTimer: 0,
+    // v4: headlights on the real car models (L toggles, main.js owns it).
+    headlights: false,
   };
 
   function statsOf(car) {
@@ -96,9 +98,15 @@ export function createWorld(random) {
 
   function makeCar(x, z, heading, color, kind, vtype) {
     const vt = vtype || 'sedan';
+    // v4: which real model this car renders as — 'comet' for Leo's orange
+    // Comet 01 (every sedan), 'police' for the Interceptor (every police
+    // car), null for the blocky truck, sports car and motorcycle. The
+    // model survives a steal (kind changes to 'player', model stays), so
+    // Leo keeps driving the police car he took.
+    const model = kind === 'police' ? 'police' : (vt === 'sedan' ? 'comet' : null);
     return {
       id: nextId(random), x, z, heading, speed: 0, cruise: range(random, 9, 15),
-      color, kind: kind || 'traffic', vtype: vt, parked: false,
+      color, kind: kind || 'traffic', vtype: vt, model, parked: false,
       axis: Math.abs(Math.sin(heading)) < 0.5 ? 'z' : 'x',
       dir: Math.random() < 0.5 ? 1 : -1,
     };
@@ -267,6 +275,7 @@ export function createWorld(random) {
     state.weapons = createWeaponState();
     state.armoryOpen = false;
     state.armoryHintTimer = 0;
+    state.headlights = false;
     state.player = {
       x: city.places.start.x, z: city.places.start.z, y: 0, vy: 0,
       heading: 0, speed: 0, health: PLAYER.health, inCar: null, fireCooldown: 0, invulnerable: 0,
@@ -280,6 +289,13 @@ export function createWorld(random) {
     const starter = makeCar(city.places.start.x + 12, city.places.start.z + 6, Math.PI / 2, PALETTE.playerCar, 'player', 'sedan');
     starter.parked = true;
     state.cars.push(starter);
+    // v4: two Comet 01s on the Comet Motors forecourt, so the dealership
+    // has stock to look at (and to steal, if Leo is feeling bold).
+    for (const spot of city.places.dealershipSpots || []) {
+      const show = makeCar(spot.x, spot.z, Math.PI / 2, PALETTE.playerCar, 'parked', 'sedan');
+      show.parked = true;
+      state.cars.push(show);
+    }
     setMissionTarget();
     state.message = 'Welcome to Solara Bay — Mara Voss is waiting at the plaza';
     state.messageTimer = 4;
@@ -549,7 +565,7 @@ export function createWorld(random) {
           car.kind = 'player';
           if (wasParked) {
             addWanted(1);
-            const label = VEHICLES[car.vtype].label;
+            const label = car.model && CAR_MODELS[car.model] ? CAR_MODELS[car.model].label : VEHICLES[car.vtype].label;
             state.message = `${label} stolen — the cops noticed!`;
             state.messageTimer = 3;
             events |= EVENT_STEAL;

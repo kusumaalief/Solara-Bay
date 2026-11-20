@@ -11,14 +11,21 @@
 // ?seed=N fixes the city and traffic. ?shot=chase|drive|mission|armory (with
 // &seed=N) stages that scene instead of running the loop, paints it and sets
 // window.__shotReady for a screenshot.
-import { STEP, VEHICLES, WEAPONS } from './config.js';
+// v4 adds the real low-poly cars: the Comet 01 (Leo's car, every sedan) and
+// the police Interceptor (every police car). Screenshot scenes await the
+// models before the first paint so the frames show them; in normal play
+// they load in the background and swap in when ready. L toggles the
+// headlights on the model cars.
+import { CAR_MODELS, STEP, VEHICLES, WEAPONS } from './config.js';
 import { createRandom } from './random.js';
 import { createWorld, EVENT_BUSTED, EVENT_BUY, EVENT_CASH, EVENT_COLLECT, EVENT_CRASH, EVENT_MISSION, EVENT_RACE, EVENT_RELOAD, EVENT_SHOT, EVENT_TAXI, EVENT_UNLOCK } from './world.js';
 import {
-  ACTION_CAMERA, ACTION_CHOOSER, ACTION_CONFIRM, ACTION_ENTER, ACTION_HORN, ACTION_INTERACT, ACTION_JUMP, ACTION_MUTE,
+  ACTION_CAMERA, ACTION_CHOOSER, ACTION_CONFIRM, ACTION_ENTER, ACTION_HORN, ACTION_INTERACT, ACTION_JUMP, ACTION_LIGHTS, ACTION_MUTE,
   ACTION_PAUSE, ACTION_PUNCH, ACTION_RESTART, ACTION_SAVE, createInput,
 } from './input.js';
 import { createAudio } from './audio.js';
+import { loadCarModels } from './cars.js';
+import { shopSubtitle } from './armory.js';
 import { createRenderer, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
 import { stageShot } from './shots.js';
 
@@ -66,6 +73,7 @@ const world = createWorld(createRandom(seed));
 const renderer = createRenderer(canvas);
 // Debug hook for play-testing (read-only state inspection in the console).
 window.__solara = world;
+window.__solaraRenderer = renderer;
 const audio = createAudio();
 let cameraYaw = Math.PI;
 let cameraYawTarget = Math.PI;
@@ -145,7 +153,7 @@ function openChooser(mode) {
   chooserOpen = true;
   if (mode === 'shop') {
     armoryTitle.textContent = "MARIN'S ARMORY";
-    armorySub.textContent = 'Gus Ferraro is minding the counter. Buy a gun, stock up on ammo, or equip what you own.';
+    armorySub.textContent = shopSubtitle(world.state);
   } else {
     armoryTitle.textContent = 'WEAPONS';
     armorySub.textContent = 'Your guns — click Equip, or press 1 / 2 / 3. Locked guns can only be bought at Marin\'s Armory.';
@@ -194,7 +202,12 @@ function updateHud() {
     messageEl.style.opacity = s.messageTimer > 0 ? '1' : '0';
   }
   if (speedEl) speedEl.textContent = p.inCar ? `${Math.round(Math.abs(p.inCar.speed) * 3.6)} km/h` : (p.speed > 0.5 ? 'On foot' : '');
-  if (vehicleEl) vehicleEl.textContent = p.inCar ? VEHICLES[p.inCar.vtype].label : '';
+  if (vehicleEl) {
+    const car = p.inCar;
+    vehicleEl.textContent = car
+      ? (car.model && CAR_MODELS[car.model] ? CAR_MODELS[car.model].label : VEHICLES[car.vtype].label)
+      : '';
+  }
   // Weapon HUD: equipped gun and ammo, updating live as the choice changes.
   if (weaponEl) {
     const w = s.weapons;
@@ -250,24 +263,32 @@ function showMissionComplete(title, reward) {
 }
 
 function runShot(name) {
-  const scene = stageShot(name, world);
-  dusk = !!scene.dusk;
-  cameraYaw = scene.cameraYaw ?? Math.PI;
-  cameraYawTarget = cameraYaw;
-  function paintOnce() {
-    renderer.draw(world.state, cameraYaw, cameraPitch, dusk);
-    updateHud();
-  }
-  hideOverlay();
-  // Paint once right away, then once more after 1.8 s: the v3 textured
-  // facades load asynchronously, and a timer (not a long rAF chain) is
-  // what guarantees the final frame shows them — headless Chrome throttles
-  // requestAnimationFrame, so a 90-frame chain stalls there.
-  requestAnimationFrame(paintOnce);
-  setTimeout(() => { paintOnce(); window.__shotReady = true; }, 1800);
+  // v4: wait for the real car models before staging and painting, so the
+  // screenshots show the Comet 01 and the Interceptor, not the blocky
+  // stand-ins. If a model fails to load the scenes still paint (blocky).
+  loadCarModels().then(() => {
+    const scene = stageShot(name, world);
+    dusk = !!scene.dusk;
+    cameraYaw = scene.cameraYaw ?? Math.PI;
+    cameraYawTarget = cameraYaw;
+    function paintOnce() {
+      renderer.draw(world.state, cameraYaw, cameraPitch, dusk);
+      updateHud();
+    }
+    hideOverlay();
+    // Paint once right away, then once more after 1.8 s: the v3 textured
+    // facades load asynchronously, and a timer (not a long rAF chain) is
+    // what guarantees the final frame shows them — headless Chrome throttles
+    // requestAnimationFrame, so a 90-frame chain stalls there.
+    requestAnimationFrame(paintOnce);
+    setTimeout(() => { paintOnce(); window.__shotReady = true; }, 1800);
+  });
 }
 
 function runGame() {
+  // v4: start the real car models loading behind the title screen, so
+  // they are usually ready by the time Leo gets in a car.
+  loadCarModels();
   const input = createInput(canvas);
   let screen = SCREEN_TITLE;
   let accumulator = 0;
@@ -291,8 +312,9 @@ function runGame() {
       '<b>Leo Marin is back in Solara Bay — and in debt.</b> Mara Voss, Dario Kess and Officer Reyes all want something from him.',
       'Five story missions: Borrowed Wheels, The Courier, the Bay Heist, the Harbor Lights race, and The Getaway — plus taxi fares and sun coins on the beach.',
       "New in v3: Marin's Armory, run by Gus Ferraro — buy the Bay Pistol, the Boomstick shotgun or the Harbor Rifle, and pick your gun in the weapon chooser (Tab or B). Vinyl Bay Records and Record Row are new on the map too.",
+      "New in v4: real low-poly cars — Leo's orange Comet 01 (every sedan, with spinning wheels and steering) and the police Interceptor with its flashing light bar, both from a free-to-use cars pack. Comet Motors, the dealership, is on the block south-east of the plaza. Press L for headlights.",
       'WASD move / drive · Mouse drag to look · Click to shoot · E enter a car · F interact · Q punch · Space jump · H horn · R restart · V camera',
-      'Shift run · P pause · C save · M mute · T reload · 1/2/3 switch gun · Tab weapon chooser',
+      'Shift run · P pause · C save · M mute · T reload · 1/2/3 switch gun · Tab weapon chooser · L headlights',
       hasSave ? 'A saved game is waiting — press Enter to continue it.' : 'No save yet — press Enter to start a new story.',
     ];
     showOverlay('SOLARA BAY', lines, hasSave ? 'Press Enter to continue, or click New Game below' : 'Press Enter or click to start');
@@ -328,6 +350,12 @@ function runGame() {
       world.state.messageTimer = 2;
     }
     if (actions & ACTION_HORN && screen === SCREEN_PLAY && world.state.player.inCar) audio.horn();
+    if (actions & ACTION_LIGHTS && screen === SCREEN_PLAY) {
+      world.state.headlights = !world.state.headlights;
+      audio.click();
+      world.state.message = world.state.headlights ? 'Headlights on' : 'Headlights off';
+      world.state.messageTimer = 2;
+    }
     if (actions & ACTION_CAMERA) { cameraYawTarget = Math.PI; }
     if (actions & ACTION_RESTART && screen === SCREEN_PLAY) {
       world.reset();
@@ -408,7 +436,7 @@ function runGame() {
     if (events & EVENT_CASH) audio.pickup();
     if (events & EVENT_CRASH) audio.crash();
     if (events & EVENT_UNLOCK) audio.mission();
-    audio.engine(world.state.player.speed, !!world.state.player.inCar);
+    audio.engine(world.state.player.speed, !!world.state.player.inCar, world.state.player.inCar?.model);
     audio.siren(STEP, world.state.wanted);
   }
 

@@ -5,7 +5,8 @@
 // third-person camera; a click fires. Arrow keys work alongside WASD, and
 // the game also listens for touch drags through pointer events, so the same
 // camera drag works on a touch screen. v3 adds: 1/2/3 switch guns, T
-// reloads, Tab or B opens the weapon chooser panel.
+// reloads, Tab or B opens the weapon chooser panel. v4 adds: L toggles
+// the headlights on Leo's car.
 export const ACTION_CONFIRM = 1;
 export const ACTION_PAUSE = 2;
 export const ACTION_ENTER = 4;
@@ -18,6 +19,7 @@ export const ACTION_HORN = 256;
 export const ACTION_RESTART = 512;
 export const ACTION_CAMERA = 1024;
 export const ACTION_CHOOSER = 2048;
+export const ACTION_LIGHTS = 4096;
 
 const UP = new Set(['ArrowUp', 'KeyW']);
 const DOWN = new Set(['ArrowDown', 'KeyS']);
@@ -36,6 +38,7 @@ const RESTART = new Set(['KeyR']);
 const CAMERA = new Set(['KeyV']);
 const RELOAD = new Set(['KeyT']);
 const CHOOSER = new Set(['Tab', 'KeyB']);
+const LIGHTS = new Set(['KeyL']);
 const WEAPON_KEYS = { Digit1: 1, Digit2: 2, Digit3: 3 };
 
 export function createInput(canvas) {
@@ -67,6 +70,7 @@ export function createInput(canvas) {
     else if (CAMERA.has(event.code)) { if (!event.repeat) actions |= ACTION_CAMERA; }
     else if (RELOAD.has(event.code)) { if (!event.repeat) reloadPressed = true; }
     else if (CHOOSER.has(event.code)) { if (!event.repeat) actions |= ACTION_CHOOSER; }
+    else if (LIGHTS.has(event.code)) { if (!event.repeat) actions |= ACTION_LIGHTS; }
     else if (WEAPON_KEYS[event.code]) { if (!event.repeat) weaponSlot = WEAPON_KEYS[event.code]; }
     else if (JUMP.has(event.code)) { if (!event.repeat) actions |= ACTION_JUMP; }
     else return;
