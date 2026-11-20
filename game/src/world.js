@@ -8,7 +8,8 @@
 // where Leo is heading, and the wanted level only cools off while Leo is
 // hidden from the police). step() advances one fixed step and returns what
 // happened as flags.
-import { CHARACTERS, COLLECTIBLES, CROWD, MISSIONS, PALETTE, PLAYER, POLICE, SAVE_KEY, TAXI, UNLOCKS, VEHICLES, WANTED, WORLD } from './config.js';
+import { ARMORY, CHARACTERS, COLLECTIBLES, CROWD, MISSIONS, PALETTE, PLAYER, POLICE, SAVE_KEY, TAXI, UNLOCKS, VEHICLES, WANTED, WEAPONS, WORLD } from './config.js';
+import { buyAmmo, buyWeapon, createWeaponState, equipWeapon, fireWeapon, finishReload, startReload } from './armory.js';
 import { buildingAt, clampToWorld, createCity, nearestRoadPoint, pushOutOfBuilding } from './city.js';
 import { nextId, pick, range, weightedPick } from './random.js';
 
@@ -22,6 +23,8 @@ export const EVENT_TAXI = 64;
 export const EVENT_RACE = 128;
 export const EVENT_COLLECT = 256;
 export const EVENT_UNLOCK = 512;
+export const EVENT_BUY = 1024;
+export const EVENT_RELOAD = 2048;
 
 const DROP_POINTS = [
   { x: 200, z: 120, name: 'Marina Bank' },
@@ -82,6 +85,9 @@ export function createWorld(random) {
     coins: [],
     taxi: null,
     taxiTimer: 0,
+    weapons: createWeaponState(),
+    armoryOpen: false,
+    armoryHintTimer: 0,
   };
 
   function statsOf(car) {
@@ -164,6 +170,8 @@ export function createWorld(random) {
       { id: 'mara', char: CHARACTERS.mara, x: city.places.start.x - 8, z: city.places.start.z + 4, heading: Math.PI / 4, walkPhase: 0 },
       { id: 'dario', char: CHARACTERS.dario, x: city.places.harbor.x + 6, z: city.places.harbor.z + 6, heading: -Math.PI / 2, walkPhase: 0 },
       { id: 'reyes', char: CHARACTERS.reyes, x: city.places.hospital.x - 6, z: city.places.hospital.z - 4, heading: Math.PI, walkPhase: 0 },
+      // Gus Ferraro minds the counter at Marin's Armory, just south of the door.
+      { id: 'gus', char: CHARACTERS.gus, x: city.places.armory.x + 6, z: city.places.armory.z + 2, heading: Math.PI, walkPhase: 0 },
     ];
   }
 
@@ -256,6 +264,9 @@ export function createWorld(random) {
     state.coins = [];
     state.taxi = null;
     state.taxiTimer = 0;
+    state.weapons = createWeaponState();
+    state.armoryOpen = false;
+    state.armoryHintTimer = 0;
     state.player = {
       x: city.places.start.x, z: city.places.start.z, y: 0, vy: 0,
       heading: 0, speed: 0, health: PLAYER.health, inCar: null, fireCooldown: 0, invulnerable: 0,
@@ -336,6 +347,38 @@ export function createWorld(random) {
     return events;
   }
 
+  // --- Armory shop: F at the door opens Gus Ferraro's counter. The shop
+  // itself is drawn by main.js; here we only open it and sell the guns.
+  function nearArmory() {
+    const p = state.player;
+    return !p.inCar && dist2(p.x, p.z, ARMORY.door.x, ARMORY.door.z) < ARMORY.interactRange * ARMORY.interactRange;
+  }
+
+  function openArmory() {
+    state.armoryOpen = true;
+    state.message = `${ARMORY.name} — Gus Ferraro is minding the counter`;
+    state.messageTimer = 3;
+  }
+
+  function closeArmory() {
+    state.armoryOpen = false;
+  }
+
+  function buyGun(id) {
+    const r = buyWeapon({ state }, id);
+    return r.ok ? EVENT_BUY : 0;
+  }
+
+  function buyGunAmmo(id) {
+    const r = buyAmmo({ state }, id);
+    return r.ok ? EVENT_BUY : 0;
+  }
+
+  function equipGun(id) {
+    const r = equipWeapon({ state }, id);
+    return r.ok ? EVENT_BUY : 0;
+  }
+
   function spawnTaxi() {
     const stands = [city.places.taxiStand, city.places.taxiStand2, city.places.taxiStand3];
     const pickup = pick(random, stands);
@@ -398,19 +441,8 @@ export function createWorld(random) {
     return 0;
   }
 
-  function fireBullet() {
-    const p = state.player;
-    if (p.fireCooldown > 0 || p.inCar) return 0;
-    p.fireCooldown = PLAYER.fireCooldown;
-    const dir = p.heading;
-    state.bullets.push({
-      x: p.x, y: 1.2, z: p.z,
-      dx: Math.sin(dir), dy: 0, dz: Math.cos(dir),
-      life: 1.4,
-    });
-    return EVENT_SHOT;
-  }
-
+  // (v3: firing moved to armory.js fireWeapon — one trigger pull per gun,
+  // with that gun's damage, pellets, spread and bullet speed.)
   function step(dt, controls) {
     let events = 0;
     state.time += dt;
@@ -526,9 +558,11 @@ export function createWorld(random) {
       }
     }
 
-    // --- Interact (mission grab / pickup) ---
+    // --- Interact (mission grab / pickup / armory door) ---
     if (controls.interact) {
-      if (state.missionIndex === 2 && state.missionStage === 0) {
+      if (nearArmory()) {
+        openArmory();
+      } else if (state.missionIndex === 2 && state.missionStage === 0) {
         const d = Math.sqrt(dist2(p.x, p.z, city.places.bank.x, city.places.bank.z));
         if (d < 9) {
           state.missionStage = 1;
@@ -541,6 +575,22 @@ export function createWorld(random) {
         }
       }
     }
+
+    // --- Weapon switching (1/2/3) and reload (T) ---
+    if (controls.weaponSlot) {
+      const id = ['pistol', 'shotgun', 'rifle'][controls.weaponSlot - 1];
+      if (id) equipGun(id);
+    }
+    if (controls.reload) {
+      if (startReload({ state })) events |= EVENT_RELOAD;
+    }
+    // Reload timer: finish it when the time is up.
+    const w = state.weapons;
+    if (w.reloading > 0) {
+      w.reloading -= dt;
+      if (w.reloading <= 0) finishReload({ state });
+    }
+    if (w.muzzle > 0) w.muzzle -= dt;
 
     // --- Punch / shoot ---
     if (controls.punch && !p.inCar) {
@@ -556,19 +606,41 @@ export function createWorld(random) {
         if (e && dist2(p.x, p.z, e.x, e.z) < 3 * 3) { e.health -= PLAYER.punchDamage; addWanted(1); }
       }
     }
-    if (controls.fire) events |= fireBullet();
+    if (controls.fire && p.fireCooldown <= 0) {
+      // Firing needs a gun: without one Leo only has his fists, and the
+      // game says so instead of silently doing nothing.
+      if (!state.weapons.current) {
+        if (state.armoryHintTimer <= 0) {
+          state.message = 'No gun yet — visit Marin\'s Armory (F at the red shop)';
+          state.messageTimer = 3;
+          state.armoryHintTimer = 5;
+        }
+      } else {
+        const fired = fireWeapon({ state });
+        if (fired) {
+          state.bullets.push(...fired);
+          // Muzzle flash: a bright particle at the barrel, drawn by render.js.
+          const p2 = state.player;
+          state.particles.push({ x: p2.x + Math.sin(p2.heading) * 1.4, y: 1.3, z: p2.z + Math.cos(p2.heading) * 1.4, vx: 0, vy: 0.5, vz: 0, life: 0.12, color: 0xffe14d, size: 0.7 });
+          events |= EVENT_SHOT;
+        }
+      }
+    }
+    if (state.armoryHintTimer > 0) state.armoryHintTimer -= dt;
 
-    // --- Bullets ---
+    // --- Bullets (per-gun damage, speed and tracer; a shotgun's pellets
+    // are separate bullets with a spread) ---
     for (let i = state.bullets.length - 1; i >= 0; i -= 1) {
       const b = state.bullets[i];
-      b.x += b.dx * 70 * dt;
-      b.y += b.dy * 70 * dt;
-      b.z += b.dz * 70 * dt;
+      const speed = b.speed || 70;
+      b.x += b.dx * speed * dt;
+      b.y += b.dy * speed * dt;
+      b.z += b.dz * speed * dt;
       b.life -= dt;
       let hit = b.life <= 0;
       for (const ped of state.peds) {
         if (ped.health > 0 && dist2(b.x, b.z, ped.x, ped.z) < 1.6 * 1.6 && Math.abs(b.y - 1.2) < 1.4) {
-          ped.health -= PLAYER.bulletDamage;
+          ped.health -= b.damage || PLAYER.bulletDamage;
           ped.flee = 4;
           if (ped.police) addWanted(1);
           hit = true;
@@ -778,6 +850,10 @@ export function createWorld(random) {
         dropsDone: state.dropsDone, raceIndex: state.raceIndex, taxiDone: state.taxiDone,
         coinsCollected: state.coinsCollected, unlocked: state.unlocked,
         x: p.x, z: p.z, health: p.health, time: state.time,
+        weapons: {
+          owned: state.weapons.owned, current: state.weapons.current,
+          ammo: state.weapons.ammo,
+        },
       };
       window.localStorage.setItem(SAVE_KEY, JSON.stringify(data));
       state.message = 'Game saved';
@@ -803,6 +879,15 @@ export function createWorld(random) {
       state.player.z = data.z ?? state.player.z;
       state.player.health = data.health ?? PLAYER.health;
       state.time = data.time ?? 0;
+      // v3 save: guns, current weapon and ammo come back with Leo.
+      if (data.weapons) {
+        state.weapons.owned = (data.weapons.owned || []).filter((id) => WEAPONS[id]);
+        state.weapons.current = WEAPONS[data.weapons.current] ? data.weapons.current : (state.weapons.owned[0] || null);
+        for (const id of state.weapons.owned) {
+          const a = data.weapons.ammo?.[id];
+          if (a) state.weapons.ammo[id] = { mag: a.mag ?? 0, reserve: a.reserve ?? 0 };
+        }
+      }
       if (state.missionIndex === 3) state.raceTimer = MISSIONS[3].timeLimit;
       for (let i = 0; i < state.coinsCollected && i < state.coins.length; i += 1) state.coins[i].taken = true;
       setMissionTarget();
@@ -815,5 +900,5 @@ export function createWorld(random) {
   }
 
   reset();
-  return { state, reset, step, save, load, hasSave, setMissionTarget, nearestCar, missionProgress, checkUnlocks };
+  return { state, reset, step, save, load, hasSave, setMissionTarget, nearestCar, missionProgress, checkUnlocks, nearArmory, openArmory, closeArmory, buyGun, buyGunAmmo, equipGun };
 }

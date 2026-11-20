@@ -2,12 +2,12 @@
 // The world is 640 by 480 units on the ground plane (x east, z south, y up).
 // Roads run on an 80-unit grid; blocks between them hold blocky buildings.
 // A blocky avatar is about 1.8 units tall; a blocky car is about 4.4 long.
-// v2 adds: four vehicle types with their own handling, five story missions,
-// a taxi side activity, beach collectibles, cash unlocks, and three named
-// mission givers (Mara Voss, Dario Kess, Officer Reyes) plus a varied crowd.
+// v3 adds: Marin's Armory (a gun shop run by Gus Ferraro) with three
+// buyable guns, a music store and a new tower district inspired by the
+// free-to-use city street pack, and a Record Row plaza.
 export const WORLD = { width: 640, height: 480 };
 export const STEP = 1 / 60;
-export const SAVE_KEY = 'solara-bay-3d.save.v2';
+export const SAVE_KEY = 'solara-bay-3d.save.v3';
 
 export const PLAYER = {
   height: 1.8,
@@ -18,6 +18,22 @@ export const PLAYER = {
   bulletDamage: 34,
   punchDamage: 25,
   fireCooldown: 0.22,
+};
+
+// Marin's Armory: three original guns. Price, damage, fire rate, range,
+// magazine and ammo are all different on purpose — the pistol is cheap
+// and steady, the shotgun hits hard up close, the rifle is fast and far.
+export const WEAPONS = {
+  pistol: { label: 'Bay Pistol', price: 150, damage: 30, fireRate: 0.25, range: 55, magSize: 12, reserveAmmo: 60, reloadTime: 1.0, pellets: 1, spread: 0.02, bulletSpeed: 80, tracer: 0xffe14d, blurb: 'Cheap, steady, always there for you.' },
+  shotgun: { label: 'Boomstick', price: 400, damage: 18, fireRate: 0.9, range: 30, magSize: 6, reserveAmmo: 24, reloadTime: 1.6, pellets: 5, spread: 0.09, bulletSpeed: 60, tracer: 0xff9e3a, blurb: 'Five pellets of close-range persuasion.' },
+  rifle: { label: 'Harbor Rifle', price: 700, damage: 55, fireRate: 0.14, range: 110, magSize: 30, reserveAmmo: 90, reloadTime: 1.4, pellets: 1, spread: 0.008, bulletSpeed: 130, tracer: 0x7ad7ff, blurb: 'Fast, far, and very loud.' },
+};
+export const ARMORY = {
+  name: "Marin's Armory",
+  keeper: 'Gus Ferraro',
+  door: { x: 228, z: 164 },
+  interactRange: 8,
+  blurb: 'Gus Ferraro sells hardware to anyone with cash and a steady hand.',
 };
 
 // Vehicle types: every drivable car in the city uses one of these rows, so a
@@ -108,6 +124,7 @@ export const CHARACTERS = {
   mara: { name: 'Mara Voss', shirt: 0xc94b6b, pants: 0x22242c, skin: 0xe8b07a, height: 0.96, hat: 'cap', hair: 0x111111 },
   dario: { name: 'Dario Kess', shirt: 0x2b6b4a, pants: 0x4a3a2a, skin: 0xd9a05a, height: 1.06, hat: 'fedora', hair: 0x555555 },
   reyes: { name: 'Officer Reyes', shirt: 0x1a2a6b, pants: 0x1a2a6b, skin: 0xf2c48a, height: 1.02, hat: 'police', hair: 0x2a1a12 },
+  gus: { name: 'Gus Ferraro', shirt: 0x5a3a1a, pants: 0x2b2b33, skin: 0xd9a05a, height: 1.08, hat: 'fedora', hair: 0x888888 },
 };
 // Crowd variety: pedestrian outfits, heights and hats are picked from these.
 export const CROWD = {
@@ -146,6 +163,12 @@ export const PALETTE = {
   policeLight: 0xff3b30,
   taxi: 0xffd23a,
   coin: 0xffd23a,
+  armory: 0x8a1a1a,
+  armorySign: 0xffd23a,
+  musicStore: 0x7a3ab8,
+  violetTower: 0x6b4a9e,
+  kiosk: 0xe5534b,
+  foodCart: 0xff9e3a,
 };
 
 export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';

@@ -1,10 +1,11 @@
-// Keyboard and mouse input for Solara Bay v2.
+// Keyboard and mouse input for Solara Bay v3.
 // Held keys give a move vector; one-shot presses (start, pause, enter a car,
 // interact, punch, save, mute, horn, restart, camera reset) are queued as
 // bit flags and taken once by the loop. Dragging the mouse orbits the
 // third-person camera; a click fires. Arrow keys work alongside WASD, and
 // the game also listens for touch drags through pointer events, so the same
-// camera drag works on a touch screen.
+// camera drag works on a touch screen. v3 adds: 1/2/3 switch guns, T
+// reloads, Tab or B opens the weapon chooser panel.
 export const ACTION_CONFIRM = 1;
 export const ACTION_PAUSE = 2;
 export const ACTION_ENTER = 4;
@@ -16,6 +17,7 @@ export const ACTION_JUMP = 128;
 export const ACTION_HORN = 256;
 export const ACTION_RESTART = 512;
 export const ACTION_CAMERA = 1024;
+export const ACTION_CHOOSER = 2048;
 
 const UP = new Set(['ArrowUp', 'KeyW']);
 const DOWN = new Set(['ArrowDown', 'KeyS']);
@@ -32,6 +34,9 @@ const JUMP = new Set(['Space']);
 const HORN = new Set(['KeyH']);
 const RESTART = new Set(['KeyR']);
 const CAMERA = new Set(['KeyV']);
+const RELOAD = new Set(['KeyT']);
+const CHOOSER = new Set(['Tab', 'KeyB']);
+const WEAPON_KEYS = { Digit1: 1, Digit2: 2, Digit3: 3 };
 
 export function createInput(canvas) {
   const keys = new Set();
@@ -44,6 +49,8 @@ export function createInput(canvas) {
   let lastX = 0;
   let lastY = 0;
   let activePointer = null;
+  let weaponSlot = 0;
+  let reloadPressed = false;
 
   window.addEventListener('keydown', (event) => {
     if (event.code === 'ShiftLeft' || event.code === 'ShiftRight') shift = true;
@@ -58,6 +65,9 @@ export function createInput(canvas) {
     else if (HORN.has(event.code)) { if (!event.repeat) actions |= ACTION_HORN; }
     else if (RESTART.has(event.code)) { if (!event.repeat) actions |= ACTION_RESTART; }
     else if (CAMERA.has(event.code)) { if (!event.repeat) actions |= ACTION_CAMERA; }
+    else if (RELOAD.has(event.code)) { if (!event.repeat) reloadPressed = true; }
+    else if (CHOOSER.has(event.code)) { if (!event.repeat) actions |= ACTION_CHOOSER; }
+    else if (WEAPON_KEYS[event.code]) { if (!event.repeat) weaponSlot = WEAPON_KEYS[event.code]; }
     else if (JUMP.has(event.code)) { if (!event.repeat) actions |= ACTION_JUMP; }
     else return;
     event.preventDefault();
@@ -97,6 +107,8 @@ export function createInput(canvas) {
     run() { return shift; },
     mouseDown() { return mouseDown; },
     takeMouseClick() { const c = clicked; clicked = false; return c; },
+    takeWeaponSlot() { const s = weaponSlot; weaponSlot = 0; return s; },
+    takeReload() { const r = reloadPressed; reloadPressed = false; return r; },
     takeCameraDelta() { const d = { yaw: yawDelta, pitch: pitchDelta }; yawDelta = 0; pitchDelta = 0; return d; },
     takeActions() { const taken = actions; actions = 0; return taken; },
   };

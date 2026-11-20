@@ -4,8 +4,10 @@
 // does nothing clever: this is a development convenience, not a web server for the internet.
 // v2 adds: a /health endpoint for play-test scripts, HEAD support, request
 // logging to stderr, and security headers (no MIME sniffing, no framing).
+// v3 adds: a version header on every response, and /health now reports the
+// game version and how many texture files are being served.
 // Usage: node serve.ts [--port 8080]
-import { createReadStream, statSync } from 'node:fs';
+import { createReadStream, readdirSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,13 +43,19 @@ const MIME: Record<string, string> = {
 };
 
 const startedAt = Date.now();
+const GAME_VERSION = 'solara-bay-v3';
+
+function textureCount() {
+  try { return readdirSync(join(root, 'textures')).filter((f) => f.endsWith('.jpg')).length; }
+  catch { return 0; }
+}
 
 createServer((request, response) => {
   const method = request.method ?? 'GET';
   const url = new URL(request.url ?? '/', 'http://localhost');
   // /health is for play-test scripts: it answers without touching game/.
   if (url.pathname === '/health') {
-    const body = JSON.stringify({ ok: true, uptime_s: Math.floor((Date.now() - startedAt) / 1000) });
+    const body = JSON.stringify({ ok: true, version: GAME_VERSION, textures: textureCount(), uptime_s: Math.floor((Date.now() - startedAt) / 1000) });
     response.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'content-length': Buffer.byteLength(body) });
     response.end(body);
     return;
@@ -81,6 +89,7 @@ createServer((request, response) => {
     'cache-control': 'no-store',
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'SAMEORIGIN',
+    'x-game-version': GAME_VERSION,
   };
   if (method === 'HEAD') {
     response.writeHead(200, headers).end();

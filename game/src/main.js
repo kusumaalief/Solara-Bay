@@ -1,17 +1,21 @@
-// Boot and the one loop for Solara Bay v2: input is read every frame, the
+// Boot and the one loop for Solara Bay v3: input is read every frame, the
 // world advances in fixed 1/60 s steps, and the Three.js renderer paints
 // what is there. Screens: title, play, paused, over, and a short
 // mission-complete banner. The camera yaw is smoothed toward its target so
 // turning the camera and driving feel calmer, and the driving camera sits
-// further back than the on-foot one.
-// ?seed=N fixes the city and traffic. ?shot=chase|drive|mission|beach (with
+// further back than the on-foot one. v3 adds Marin's Armory and the weapon
+// chooser panel: a big readable card per gun (blocky SVG icon, damage, fire
+// rate, range, ammo, price / owned status) that opens at the armory with F
+// or anywhere with Tab/B, pauses the world while it is open, and lets Leo
+// buy and equip guns with mouse or 1/2/3.
+// ?seed=N fixes the city and traffic. ?shot=chase|drive|mission|armory (with
 // &seed=N) stages that scene instead of running the loop, paints it and sets
 // window.__shotReady for a screenshot.
-import { STEP, VEHICLES } from './config.js';
+import { STEP, VEHICLES, WEAPONS } from './config.js';
 import { createRandom } from './random.js';
-import { createWorld, EVENT_BUSTED, EVENT_CASH, EVENT_COLLECT, EVENT_CRASH, EVENT_MISSION, EVENT_RACE, EVENT_TAXI, EVENT_UNLOCK } from './world.js';
+import { createWorld, EVENT_BUSTED, EVENT_BUY, EVENT_CASH, EVENT_COLLECT, EVENT_CRASH, EVENT_MISSION, EVENT_RACE, EVENT_RELOAD, EVENT_SHOT, EVENT_TAXI, EVENT_UNLOCK } from './world.js';
 import {
-  ACTION_CAMERA, ACTION_CONFIRM, ACTION_ENTER, ACTION_HORN, ACTION_INTERACT, ACTION_JUMP, ACTION_MUTE,
+  ACTION_CAMERA, ACTION_CHOOSER, ACTION_CONFIRM, ACTION_ENTER, ACTION_HORN, ACTION_INTERACT, ACTION_JUMP, ACTION_MUTE,
   ACTION_PAUSE, ACTION_PUNCH, ACTION_RESTART, ACTION_SAVE, createInput,
 } from './input.js';
 import { createAudio } from './audio.js';
@@ -38,7 +42,14 @@ const progressFill = document.getElementById('progress-fill');
 const messageEl = document.getElementById('message');
 const speedEl = document.getElementById('speed');
 const vehicleEl = document.getElementById('vehicle');
+const weaponEl = document.getElementById('weapon');
 const minimap = document.getElementById('minimap');
+const armoryEl = document.getElementById('armory');
+const armoryTitle = document.getElementById('armory-title');
+const armorySub = document.getElementById('armory-sub');
+const armoryCash = document.getElementById('armory-cash');
+const gunListEl = document.getElementById('gun-list');
+const armoryCloseBtn = document.getElementById('armory-close');
 const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlayLines = document.getElementById('overlay-lines');
@@ -62,6 +73,94 @@ let cameraPitch = 0.15;
 let dusk = false;
 let lastHealth = 100;
 let missionBannerTimer = null;
+let chooserOpen = false;
+let chooserMode = 'shop'; // 'shop' at the armory (buy + equip), 'chooser' anywhere (equip owned)
+
+// Blocky SVG icons for the chooser cards — chunky rectangles, no images.
+const GUN_ICONS = {
+  pistol: '<svg width="110" height="52" viewBox="0 0 110 52"><rect x="18" y="12" width="62" height="14" fill="#c8cfdb"/><rect x="18" y="26" width="16" height="20" fill="#8a6b3a"/><rect x="74" y="16" width="10" height="6" fill="#ffd23a"/></svg>',
+  shotgun: '<svg width="110" height="52" viewBox="0 0 110 52"><rect x="8" y="16" width="86" height="10" fill="#8a6b3a"/><rect x="30" y="26" width="26" height="8" fill="#6b4a2a"/><rect x="8" y="26" width="14" height="14" fill="#5a3a1a"/><rect x="88" y="18" width="8" height="6" fill="#ffd23a"/></svg>',
+  rifle: '<svg width="110" height="52" viewBox="0 0 110 52"><rect x="6" y="16" width="96" height="9" fill="#2b4a6b"/><rect x="40" y="6" width="22" height="8" fill="#111111"/><rect x="46" y="25" width="8" height="14" fill="#22242c"/><rect x="6" y="25" width="12" height="12" fill="#22242c"/><rect x="96" y="17" width="8" height="7" fill="#7ad7ff"/></svg>',
+};
+
+function renderChooser() {
+  const s = world.state;
+  const w = s.weapons;
+  armoryCash.textContent = `Your cash: $${s.cash}`;
+  gunListEl.innerHTML = '';
+  for (const id of ['pistol', 'shotgun', 'rifle']) {
+    const stats = WEAPONS[id];
+    const owned = w.owned.includes(id);
+    const equipped = w.current === id;
+    const a = w.ammo[id];
+    const row = document.createElement('div');
+    row.className = `gun-row${equipped ? ' equipped' : ''}${owned ? '' : ' locked'}`;
+    const fireRate = `${(1 / stats.fireRate).toFixed(1)}/s`;
+    row.innerHTML = `<div class="gun-icon">${GUN_ICONS[id]}<div style="font-size:13px;font-weight:700;color:#c8cfdb">press ${['pistol', 'shotgun', 'rifle'].indexOf(id) + 1}</div></div>`
+      + `<div class="gun-info"><div class="gun-name">${stats.label}${equipped ? '<span class="tag">✓ EQUIPPED</span>' : ''}${owned ? '' : ' 🔒'}</div>`
+      + `<div class="gun-blurb">${stats.blurb}</div>`
+      + `<div class="gun-stats">Damage <span>${stats.damage}${stats.pellets > 1 ? ` × ${stats.pellets}` : ''}</span> Fire rate <span>${fireRate}</span> Range <span>${stats.range}m</span> Mag <span>${owned ? `${a.mag}/${stats.magSize}` : stats.magSize}</span> Reserve <span>${owned ? a.reserve : stats.reserveAmmo}</span></div></div>`
+      + `<div class="gun-actions"></div>`;
+    const actionsEl = row.querySelector('.gun-actions');
+    if (!owned) {
+      const buy = document.createElement('button');
+      buy.type = 'button';
+      buy.textContent = `Buy — $${stats.price}`;
+      buy.disabled = chooserMode !== 'shop' || s.cash < stats.price;
+      if (chooserMode !== 'shop') buy.title = "Visit Marin's Armory to buy";
+      buy.addEventListener('click', () => {
+        if (world.buyGun(id)) { audio.buy(); renderChooser(); }
+        else renderChooser();
+      });
+      actionsEl.appendChild(buy);
+      const note = document.createElement('div');
+      note.style.cssText = 'font-size:13px;color:#c8cfdb;text-align:center';
+      note.textContent = chooserMode === 'shop' ? 'At the armory' : 'Buy at the armory';
+      actionsEl.appendChild(note);
+    } else {
+      const equip = document.createElement('button');
+      equip.type = 'button';
+      equip.textContent = equipped ? '✓ Equipped' : 'Equip';
+      equip.disabled = equipped;
+      equip.addEventListener('click', () => { world.equipGun(id); renderChooser(); });
+      actionsEl.appendChild(equip);
+      const ammo = document.createElement('button');
+      ammo.type = 'button';
+      ammo.className = 'secondary';
+      ammo.textContent = 'Ammo +60 — $40';
+      ammo.disabled = chooserMode !== 'shop' || s.cash < 40;
+      if (chooserMode !== 'shop') ammo.title = "Visit Marin's Armory to buy ammo";
+      ammo.addEventListener('click', () => {
+        if (world.buyGunAmmo(id)) { audio.buy(); renderChooser(); }
+        else renderChooser();
+      });
+      actionsEl.appendChild(ammo);
+    }
+    gunListEl.appendChild(row);
+  }
+}
+
+function openChooser(mode) {
+  chooserMode = mode;
+  chooserOpen = true;
+  if (mode === 'shop') {
+    armoryTitle.textContent = "MARIN'S ARMORY";
+    armorySub.textContent = 'Gus Ferraro is minding the counter. Buy a gun, stock up on ammo, or equip what you own.';
+  } else {
+    armoryTitle.textContent = 'WEAPONS';
+    armorySub.textContent = 'Your guns — click Equip, or press 1 / 2 / 3. Locked guns can only be bought at Marin\'s Armory.';
+  }
+  renderChooser();
+  armoryEl.classList.remove('hidden');
+  hud.classList.add('dim');
+}
+
+function closeChooser() {
+  chooserOpen = false;
+  world.closeArmory();
+  armoryEl.classList.add('hidden');
+  hud.classList.remove('dim');
+}
 
 function announce(message) {
   if (statusEl) statusEl.textContent = message;
@@ -96,6 +195,20 @@ function updateHud() {
   }
   if (speedEl) speedEl.textContent = p.inCar ? `${Math.round(Math.abs(p.inCar.speed) * 3.6)} km/h` : (p.speed > 0.5 ? 'On foot' : '');
   if (vehicleEl) vehicleEl.textContent = p.inCar ? VEHICLES[p.inCar.vtype].label : '';
+  // Weapon HUD: equipped gun and ammo, updating live as the choice changes.
+  if (weaponEl) {
+    const w = s.weapons;
+    if (w.current) {
+      const stats = WEAPONS[w.current];
+      const a = w.ammo[w.current];
+      const reloading = w.reloading > 0
+        ? ` <span class="reload">RELOADING…</span>`
+        : '';
+      weaponEl.innerHTML = `${stats.label} <span class="ammo">${a.mag} / ${a.reserve}</span>${reloading}`;
+    } else {
+      weaponEl.textContent = "NO GUN — visit Marin's Armory (Tab for weapons)";
+    }
+  }
   if (minimap) renderer.drawMinimap(s, minimap);
   // Damage flash when Leo's health drops sharply.
   if (p.health < lastHealth - 4 && damageFlash) {
@@ -141,16 +254,17 @@ function runShot(name) {
   dusk = !!scene.dusk;
   cameraYaw = scene.cameraYaw ?? Math.PI;
   cameraYawTarget = cameraYaw;
-  let painted = 0;
-  function paint() {
+  function paintOnce() {
     renderer.draw(world.state, cameraYaw, cameraPitch, dusk);
     updateHud();
-    painted += 1;
-    if (painted < 4) requestAnimationFrame(paint);
-    else window.__shotReady = true;
   }
   hideOverlay();
-  requestAnimationFrame(paint);
+  // Paint once right away, then once more after 1.8 s: the v3 textured
+  // facades load asynchronously, and a timer (not a long rAF chain) is
+  // what guarantees the final frame shows them — headless Chrome throttles
+  // requestAnimationFrame, so a 90-frame chain stalls there.
+  requestAnimationFrame(paintOnce);
+  setTimeout(() => { paintOnce(); window.__shotReady = true; }, 1800);
 }
 
 function runGame() {
@@ -176,8 +290,9 @@ function runGame() {
     const lines = [
       '<b>Leo Marin is back in Solara Bay — and in debt.</b> Mara Voss, Dario Kess and Officer Reyes all want something from him.',
       'Five story missions: Borrowed Wheels, The Courier, the Bay Heist, the Harbor Lights race, and The Getaway — plus taxi fares and sun coins on the beach.',
+      "New in v3: Marin's Armory, run by Gus Ferraro — buy the Bay Pistol, the Boomstick shotgun or the Harbor Rifle, and pick your gun in the weapon chooser (Tab or B). Vinyl Bay Records and Record Row are new on the map too.",
       'WASD move / drive · Mouse drag to look · Click to shoot · E enter a car · F interact · Q punch · Space jump · H horn · R restart · V camera',
-      'Shift run · P pause · C save · M mute',
+      'Shift run · P pause · C save · M mute · T reload · 1/2/3 switch gun · Tab weapon chooser',
       hasSave ? 'A saved game is waiting — press Enter to continue it.' : 'No save yet — press Enter to start a new story.',
     ];
     showOverlay('SOLARA BAY', lines, hasSave ? 'Press Enter to continue, or click New Game below' : 'Press Enter or click to start');
@@ -196,6 +311,17 @@ function runGame() {
   }
 
   function handleActions(actions) {
+    // The weapon chooser eats its own keys: Tab/B or Esc closes it, and
+    // 1/2/3 equip straight from the panel. The world stays frozen while
+    // it is open — police and missions wait for Leo.
+    if (chooserOpen) {
+      if (actions & (ACTION_CHOOSER | ACTION_PAUSE)) closeChooser();
+      return;
+    }
+    if (actions & ACTION_CHOOSER && screen === SCREEN_PLAY) {
+      openChooser('chooser');
+      return;
+    }
     if (actions & ACTION_MUTE) {
       const muted = audio.toggleMute();
       world.state.message = muted ? 'Sound muted' : 'Sound on';
@@ -226,6 +352,17 @@ function runGame() {
     const actions = input.takeActions();
     handleActions(actions);
     if (screen !== SCREEN_PLAY) return;
+    // While the weapon chooser is open the world is frozen — but 1/2/3
+    // still equip straight from the panel.
+    if (chooserOpen) {
+      const slot = input.takeWeaponSlot();
+      if (slot) {
+        const id = ['pistol', 'shotgun', 'rifle'][slot - 1];
+        if (id && world.equipGun(id)) renderChooser();
+      }
+      input.takeReload();
+      return;
+    }
     const cam = input.takeCameraDelta();
     cameraYawTarget += cam.yaw;
     cameraPitch = Math.max(-0.4, Math.min(0.7, cameraPitch + cam.pitch));
@@ -243,10 +380,16 @@ function runGame() {
       interact: !!(actions & ACTION_INTERACT),
       punch: !!(actions & ACTION_PUNCH),
       fire: input.mouseDown() && !world.state.player.inCar,
+      weaponSlot: input.takeWeaponSlot(),
+      reload: input.takeReload(),
       cameraYaw,
     };
     input.takeMouseClick();
     const events = world.step(STEP, controls);
+    if (world.state.armoryOpen && !chooserOpen) openChooser('shop');
+    if (events & EVENT_SHOT) audio.shoot(world.state.weapons.current);
+    if (events & EVENT_BUY) audio.buy();
+    if (events & EVENT_RELOAD) audio.reload();
     if (events & EVENT_MISSION) {
       audio.mission();
       const finished = world.state.missionIndex - 1;
@@ -299,6 +442,7 @@ function runGame() {
   });
 
   // Buttons on the overlay, for mouse players.
+  if (armoryCloseBtn) armoryCloseBtn.addEventListener('click', () => closeChooser());
   if (startBtn) startBtn.addEventListener('click', () => { audio.unlock(); startGame(false); });
   if (newBtn) newBtn.addEventListener('click', () => { audio.unlock(); startGame(true); });
   if (resumeBtn) resumeBtn.addEventListener('click', () => { screen = SCREEN_PLAY; hideOverlay(); });

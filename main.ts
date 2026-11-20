@@ -1,11 +1,14 @@
-// Solara Bay v2 — a working gta6-01 entry (Node 22, standard library only).
+// Solara Bay v3 — a working gta6-01 entry (Node 22, standard library only).
 // The game is this directory's game/ folder: plain static files a desktop
 // browser loads offline (game/index.html, its ES modules and the vendored
 // Three.js build under game/vendor/, no library from a CDN and no network
-// request). It is a 3D blocky open-world crime game in the spirit of GTA 6:
-// a city to explore on foot and by car, traffic and pedestrians, cars to
-// steal, a wanted level with police, five story missions and a story, a taxi
-// side activity and beach collectibles, combat, a HUD with a minimap, a
+// request). Three small JPEG textures under game/textures/ (48 KB total,
+// downscaled from a free-to-use city street pack) are used as storefront
+// facades and a billboard. It is a 3D blocky open-world crime game in the
+// spirit of GTA 6: a city to explore on foot and by car, traffic and
+// pedestrians, cars to steal, a wanted level with police, five story
+// missions and a story, a taxi side activity and beach collectibles, combat
+// with three buyable guns from Marin's Armory, a HUD with a minimap, a
 // start screen, a pause menu and a save. This program hands it in: it copies
 // game/ and screenshots/ from beside this file to /output and writes
 // /output/dossier.json, the summary the judge reads, with the vendored

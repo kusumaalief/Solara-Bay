@@ -1,16 +1,53 @@
 // Drawing only, in 3D: a Three.js scene for Solara Bay, built from blocky
-// boxes — blocky avatars, blocky cars, blocky buildings. No textures from
-// outside, no network: every material is a flat colour. v2 adds real-time
-// shadows from a warm sun, drifting clouds, a second district's taller
-// towers, a lighthouse, a pier, palms, lamps, billboards and benches, four
-// vehicle shapes (sedan, sports car, truck, motorcycle with a rider),
-// avatars with heights, hair and hats, a smooth lagging follow camera, and a
-// much richer minimap (north, player arrow, police blips, mission marker,
-// taxi and coin dots). The camera is a third-person follow camera; the
-// minimap is a separate 2D canvas.
+// boxes — blocky avatars, blocky cars, blocky buildings. v3 adds Marin's
+// Armory (a gun shop with a weapon rack, ammo crates and a big red sign),
+// the Vinyl Bay Records music store and the Violet Towers (textured
+// facades from a free-to-use city street pack), a Record Row plaza with a
+// kiosk, food cart, market stalls and a neon-skyline billboard, the gun
+// Leo is holding (one blocky model per weapon, with a muzzle flash), and
+// tracer-coloured bullets. Everything is local under game/ — no network.
 import * as THREE from 'three';
-import { PALETTE, WORLD } from './config.js';
+import { PALETTE, WEAPONS, WORLD } from './config.js';
 import { HORIZONTAL_ROADS, ROAD_WIDTH, VERTICAL_ROADS } from './city.js';
+
+// v3 textures, from the free-to-use city street pack the entrant supplied:
+// three small downscaled JPEGs (48 KB total) used as storefront facades
+// and a billboard, so the flat-colour blocky style stays coherent. The
+// armory and music-store signs are canvas-drawn text textures (original).
+const FACADE_ASPECT = {
+  'textures/facade-orange.jpg': 512 / 413,
+  'textures/facade-violet.jpg': 512 / 467,
+  'textures/skyline-neon.jpg': 512 / 117,
+};
+const textureCache = new Map();
+function loadTexture(path) {
+  if (!textureCache.has(path)) {
+    const tex = new THREE.TextureLoader().load(path);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    textureCache.set(path, tex);
+  }
+  return textureCache.get(path);
+}
+
+function makeSignTexture(lines, bg, fg) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, 512, 128);
+  ctx.fillStyle = fg;
+  ctx.textAlign = 'center';
+  ctx.font = '900 56px system-ui, sans-serif';
+  ctx.fillText(lines[0], 256, 62);
+  if (lines[1]) {
+    ctx.font = '700 28px system-ui, sans-serif';
+    ctx.fillText(lines[1], 256, 104);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
 
 export const SCREEN_TITLE = 'title';
 export const SCREEN_PLAY = 'play';
@@ -165,6 +202,38 @@ function makeCarMesh(color, kind, vtype) {
   return group;
 }
 
+function makeGunMesh(id) {
+  // One blocky gun model per weapon, held in Leo's right hand (local +z
+  // is forward once the avatar group is rotated to his heading).
+  const group = new THREE.Group();
+  if (id === 'shotgun') {
+    const barrel = box(0.1, 0.12, 1.15, 0x3a2a1a);
+    barrel.position.set(0, 0, 0.35);
+    const pump = box(0.12, 0.14, 0.4, 0x6b4a2a);
+    pump.position.set(0, -0.06, 0.45);
+    const stock = box(0.1, 0.16, 0.4, 0x5a3a1a);
+    stock.position.set(0, -0.02, -0.45);
+    group.add(barrel, pump, stock);
+  } else if (id === 'rifle') {
+    const barrel = box(0.09, 0.11, 1.35, 0x1a2a3a);
+    barrel.position.set(0, 0, 0.4);
+    const scope = box(0.08, 0.1, 0.35, 0x111111);
+    scope.position.set(0, 0.12, 0.25);
+    const mag = box(0.08, 0.22, 0.12, 0x22242c);
+    mag.position.set(0, -0.14, 0.05);
+    const stock = box(0.09, 0.14, 0.35, 0x22242c);
+    stock.position.set(0, 0, -0.5);
+    group.add(barrel, scope, mag, stock);
+  } else {
+    const barrel = box(0.11, 0.13, 0.5, 0x22242c);
+    barrel.position.set(0, 0, 0.15);
+    const grip = box(0.1, 0.3, 0.12, 0x4a3a2a);
+    grip.position.set(0, -0.18, -0.08);
+    group.add(barrel, grip);
+  }
+  return group;
+}
+
 export function createRenderer(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -193,6 +262,8 @@ export function createRenderer(canvas) {
   const pedMeshes = new Map();
   const npcMeshes = new Map();
   let playerMesh = null;
+  const gunMeshes = new Map();
+  let muzzleMesh = null;
   let markerMesh = null;
   let markerBeam = null;
   let markerRing = null;
@@ -287,6 +358,61 @@ export function createRenderer(canvas) {
       const roof = box(b.width + 0.6, 0.5, b.depth + 0.6, b.harbor ? 0x1e3a4a : 0x22242c);
       roof.position.set(b.x + b.width / 2, b.height + 0.25, b.z + b.depth / 2);
       cityMeshes.add(roof);
+      // v3: textured facades from the city street pack, sized to the
+      // image's own aspect so the illustration is not squashed.
+      if (b.facade) {
+        const aspect = FACADE_ASPECT[b.facade] || 1;
+        const fw = Math.min(b.width * 0.94, b.height * 0.9 * aspect);
+        const fh = fw / aspect;
+        const face = new THREE.Mesh(
+          new THREE.PlaneGeometry(fw, fh),
+          new THREE.MeshLambertMaterial({ map: loadTexture(b.facade) }),
+        );
+        face.position.set(b.x + b.width / 2, Math.min(b.height * 0.55, fh / 2 + 1), b.z + b.depth + 0.08);
+        cityMeshes.add(face);
+      }
+      // Marin's Armory: a big red canvas sign over the door, a weapon rack
+      // and ammo crates on the sidewalk so the shop reads from the street.
+      if (b.kind === 'armory') {
+        const sign = new THREE.Mesh(
+          new THREE.PlaneGeometry(20, 5),
+          new THREE.MeshBasicMaterial({ map: makeSignTexture(["MARIN'S ARMORY", 'GUNS • AMMO • GUS FERRARO'], '#8a1a1a', '#ffd23a') }),
+        );
+        sign.position.set(b.x + b.width / 2, 7.2, b.z + b.depth + 0.1);
+        cityMeshes.add(sign);
+        const rack = box(6, 0.3, 0.8, 0x5a3a1a);
+        rack.position.set(b.x + 4, 1.4, b.z + b.depth + 1.6);
+        const rackLegL = box(0.3, 1.4, 0.3, 0x5a3a1a);
+        rackLegL.position.set(b.x + 1.5, 0.7, b.z + b.depth + 1.6);
+        const rackLegR = rackLegL.clone();
+        rackLegR.position.x = b.x + 6.5;
+        cityMeshes.add(rack, rackLegL, rackLegR);
+        // Three blocky guns on the rack: a pistol, a shotgun, a rifle.
+        const rackGuns = [
+          { x: b.x + 2.4, len: 0.9, color: 0x22242c },
+          { x: b.x + 4, len: 1.6, color: 0x3a2a1a },
+          { x: b.x + 5.6, len: 1.9, color: 0x1a2a3a },
+        ];
+        for (const g of rackGuns) {
+          const gun = box(0.18, 0.18, g.len, g.color);
+          gun.position.set(g.x, 1.75, b.z + b.depth + 1.6);
+          cityMeshes.add(gun);
+        }
+        for (const [cx, cz] of [[b.x + 20, b.z + b.depth + 2], [b.x + 22.5, b.z + b.depth + 2]]) {
+          const crate = box(1.8, 1.2, 1.8, 0x4a6b2a);
+          crate.position.set(cx, 0.6, cz);
+          cityMeshes.add(crate);
+        }
+      }
+      // Vinyl Bay Records: a purple canvas sign above the orange facade.
+      if (b.kind === 'musicstore') {
+        const sign = new THREE.Mesh(
+          new THREE.PlaneGeometry(13, 3.25),
+          new THREE.MeshBasicMaterial({ map: makeSignTexture(['VINYL BAY', 'RECORDS • MUSIC STORE'], '#2a1a4a', '#e8a1ff') }),
+        );
+        sign.position.set(b.x + b.width / 2, b.height + 1.2, b.z + b.depth + 0.1);
+        cityMeshes.add(sign);
+      }
       // Rooftop detail: a water tank on the taller towers.
       if (b.height > 24) {
         const tank = new THREE.Mesh(
@@ -345,6 +471,69 @@ export function createRenderer(canvas) {
         const bench = box(2.4, 0.4, 0.8, 0x8a6b3a);
         bench.position.set(prop.x, 0.5, prop.z);
         cityMeshes.add(bench);
+      } else if (prop.kind === 'kiosk') {
+        // Record Row kiosk: a red hut with a striped awning, selling papers.
+        const hut = box(3.2, 2.6, 3, PALETTE.kiosk);
+        hut.position.set(prop.x, 1.3, prop.z);
+        const roof = box(3.8, 0.3, 3.6, 0xf2f2f2);
+        roof.position.set(prop.x, 2.75, prop.z);
+        const counter = box(3.4, 0.9, 0.5, 0x8a6b3a);
+        counter.position.set(prop.x, 0.9, prop.z + 1.7);
+        cityMeshes.add(hut, roof, counter);
+      } else if (prop.kind === 'foodcart') {
+        // Street food cart with a canopy, from the pack's street props.
+        const cart = box(2.4, 1.3, 1.5, PALETTE.foodCart);
+        cart.position.set(prop.x, 1.0, prop.z);
+        const canopy = box(2.8, 0.15, 1.9, 0xffd23a);
+        canopy.position.set(prop.x, 2.3, prop.z);
+        const poleL = box(0.12, 1, 0.12, 0x22242c);
+        poleL.position.set(prop.x - 1.2, 1.8, prop.z);
+        const poleR = poleL.clone();
+        poleR.position.x = prop.x + 1.2;
+        cityMeshes.add(cart, canopy, poleL, poleR);
+      } else if (prop.kind === 'planter') {
+        const tub = box(2.2, 0.9, 2.2, 0x6b4a2a);
+        tub.position.set(prop.x, 0.45, prop.z);
+        const bush = box(1.8, 1.1, 1.8, 0x2a7a3a);
+        bush.position.set(prop.x, 1.4, prop.z);
+        cityMeshes.add(tub, bush);
+      } else if (prop.kind === 'busstop') {
+        const roof = box(5, 0.25, 2.4, 0x2b6b8a);
+        roof.position.set(prop.x, 3, prop.z);
+        for (const dx of [-2.2, 2.2]) {
+          const post = box(0.25, 3, 0.25, 0x22242c);
+          post.position.set(prop.x + dx, 1.5, prop.z);
+          cityMeshes.add(post);
+        }
+        const bench = box(4, 0.4, 0.8, 0x8a6b3a);
+        bench.position.set(prop.x, 0.5, prop.z);
+        cityMeshes.add(roof, bench);
+      } else if (prop.kind === 'billboard') {
+        // The pack's neon night skyline, as a big plaza billboard.
+        const aspect = FACADE_ASPECT[prop.texture] || 4.37;
+        const bw = 16;
+        const board = box(bw, bw / aspect + 0.4, 0.4, 0x1a1a2e);
+        board.position.set(prop.x, 5.5, prop.z);
+        const face = new THREE.Mesh(
+          new THREE.PlaneGeometry(bw - 0.4, (bw - 0.4) / aspect),
+          new THREE.MeshBasicMaterial({ map: loadTexture(prop.texture) }),
+        );
+        face.position.set(prop.x, 5.5, prop.z + 0.25);
+        for (const dx of [-6, 6]) {
+          const post = box(0.5, 4, 0.5, 0x22242c);
+          post.position.set(prop.x + dx, 2, prop.z);
+          cityMeshes.add(post);
+        }
+        cityMeshes.add(board, face);
+      } else if (prop.kind === 'stall') {
+        // Market stall on Record Row: table, canopy and crates of goods.
+        const table = box(3.4, 1, 1.8, 0x8a6b3a);
+        table.position.set(prop.x, 0.5, prop.z);
+        const canopy = box(3.8, 0.15, 2.4, 0xc94b6b);
+        canopy.position.set(prop.x, 2.6, prop.z);
+        const goods = box(2.8, 0.5, 1.2, 0xe8a13a);
+        goods.position.set(prop.x, 1.25, prop.z);
+        cityMeshes.add(table, canopy, goods);
       } else if (prop.kind === 'sign') {
         const board = box(10, 2.4, 0.4, prop.color);
         board.position.set(prop.x, 6, prop.z);
@@ -449,6 +638,28 @@ export function createRenderer(canvas) {
     }
     playerMesh.visible = !p.inCar;
     if (!p.inCar) syncAvatar(playerMesh, p.x, p.y, p.z, p.heading, p.x * 0.4 + p.z * 0.4 + state.time * 8, p.speed > 0.5);
+    // The gun in Leo's hand: one blocky model per weapon, shown only for
+    // the equipped gun, with a muzzle flash while the flash timer runs.
+    const currentGun = state.weapons ? state.weapons.current : null;
+    for (const id of ['pistol', 'shotgun', 'rifle']) {
+      let gun = gunMeshes.get(id);
+      if (!gun) {
+        gun = makeGunMesh(id);
+        gun.position.set(0.55, 1.05, 0.35);
+        playerMesh.add(gun);
+        gunMeshes.set(id, gun);
+      }
+      gun.visible = !p.inCar && currentGun === id;
+    }
+    if (!muzzleMesh) {
+      muzzleMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.3, 0.3, 0.3),
+        new THREE.MeshBasicMaterial({ color: 0xffe14d }),
+      );
+      muzzleMesh.position.set(0.55, 1.05, 1.5);
+      playerMesh.add(muzzleMesh);
+    }
+    muzzleMesh.visible = !p.inCar && !!currentGun && state.weapons.muzzle > 0;
 
     // Named mission givers stand at their places, distinct from the crowd.
     const seenNpcs = new Set();
@@ -503,13 +714,17 @@ export function createRenderer(canvas) {
     for (const [key, mesh] of [...pedMeshes]) {
       if (!seenPeds.has(key)) { scene.remove(mesh); pedMeshes.delete(key); }
     }
-    // Bullets
+    // Bullets, coloured by the gun that fired them (pistol gold, shotgun
+    // orange, rifle blue tracer).
     while (bulletMeshes.length < state.bullets.length) {
       const m = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffe14d }));
       scene.add(m);
       bulletMeshes.push(m);
     }
-    state.bullets.forEach((b, i) => bulletMeshes[i].position.set(b.x, b.y, b.z));
+    state.bullets.forEach((b, i) => {
+      bulletMeshes[i].position.set(b.x, b.y, b.z);
+      bulletMeshes[i].material.color.setHex((b.weapon && WEAPONS[b.weapon] && WEAPONS[b.weapon].tracer) || 0xffe14d);
+    });
     bulletMeshes.forEach((m, i) => { m.visible = i < state.bullets.length; });
     // Particles
     while (particleMeshes.length < state.particles.length) {
@@ -640,6 +855,18 @@ export function createRenderer(canvas) {
       ctx.beginPath();
       ctx.arc(state.missionTarget.x * sx, state.missionTarget.z * sz, 3.5, 0, Math.PI * 2);
       ctx.fill();
+    }
+    // Armory and music store: red and purple squares so Leo can find them.
+    if (state.city.places.armory) {
+      ctx.fillStyle = '#ff3b30';
+      ctx.fillRect(state.city.places.armory.x * sx - 4, state.city.places.armory.z * sz - 4, 8, 8);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 8px system-ui, sans-serif';
+      ctx.fillText('A', state.city.places.armory.x * sx - 3, state.city.places.armory.z * sz + 3);
+    }
+    if (state.city.places.musicstore) {
+      ctx.fillStyle = '#c98af2';
+      ctx.fillRect(state.city.places.musicstore.x * sx - 3, state.city.places.musicstore.z * sz - 3, 6, 6);
     }
     // Named givers: purple dots.
     ctx.fillStyle = '#c98af2';

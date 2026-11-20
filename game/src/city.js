@@ -7,7 +7,7 @@
 // reads as two places, not one repeated grid.
 // Coordinates: x east (0..640), z south (0..480), y up. Roads are 14 wide.
 import { PALETTE, WORLD } from './config.js';
-import { pick, range } from './random.js';
+import { chance, intRange, pick, range } from './random.js';
 
 export const ROAD_WIDTH = 14;
 export const VERTICAL_ROADS = [40, 120, 200, 280, 360, 440, 520, 600];
@@ -53,6 +53,10 @@ export function createCity(random) {
         continue;
       }
       if (cz > 430) continue;
+      // v3: three blocks are reserved for hand-placed landmarks — Marin's
+      // Armory, the Vinyl Bay music store and the Violet Towers — so the
+      // random tower never lands on top of them.
+      if ((ix === 2 && iy === 1) || (ix === 4 && iy === 1) || (ix === 1 && iy === 0)) continue;
       const w = harbor ? range(random, 24, 36) : range(random, 18, 34);
       const d = harbor ? range(random, 20, 30) : range(random, 14, 26);
       buildings.push({
@@ -64,6 +68,33 @@ export function createCity(random) {
       if (random() < 0.5) trees.push({ x: range(random, x0, x1), z: range(random, z0, z1), h: range(random, 3, 5) });
     }
   }
+  // v3 landmarks, inspired by the city street pack the entrant supplied
+  // (its orange apartment facade, purple towers and neon skyline are used
+  // as textures on these buildings — see render.js): Marin's Armory, the
+  // Vinyl Bay Records music store, and the Violet Towers.
+  buildings.push(
+    { x: 215, z: 140, width: 26, depth: 18, height: 10, color: PALETTE.armory, kind: 'armory' },
+    { x: 380, z: 140, width: 30, depth: 20, height: 12, color: PALETTE.musicStore, kind: 'musicstore', facade: 'textures/facade-orange.jpg' },
+    { x: 150, z: 60, width: 20, depth: 16, height: 38, color: PALETTE.violetTower, kind: 'tower', facade: 'textures/facade-violet.jpg' },
+  );
+  // Record Row: a small plaza in front of the music store — a kiosk, a
+  // food cart, benches and planters, and market stalls in the block below.
+  // The pack's benches (banca), cans and street props are the reference.
+  props.push({ kind: 'kiosk', x: 360, z: 185 });
+  props.push({ kind: 'foodcart', x: 430, z: 185 });
+  props.push({ kind: 'billboard', x: 320, z: 188, texture: 'textures/skyline-neon.jpg' });
+  props.push({ kind: 'busstop', x: 365, z: 220 });
+  for (let i = 0; i < intRange(random, 2, 3); i += 1) {
+    props.push({ kind: 'stall', x: 395 + i * 16, z: 222 });
+  }
+  for (const bx of [375, 395, 415]) {
+    if (chance(random, 0.8)) props.push({ kind: 'bench', x: bx, z: 192 });
+    props.push({ kind: 'planter', x: bx + 8, z: 192 });
+  }
+  // Benches and planters outside the armory, on its south sidewalk.
+  props.push({ kind: 'bench', x: 216, z: 170 });
+  props.push({ kind: 'bench', x: 250, z: 170 });
+  props.push({ kind: 'planter', x: 244, z: 170 });
   // Beach promenade: palms, lamps and benches along the sand (z ~ 448-462).
   for (let x = 30; x < WORLD.width - 20; x += 40) {
     props.push({ kind: 'palm', x, z: 452, h: range(random, 4, 6) });
@@ -97,6 +128,9 @@ export function createCity(random) {
     taxiStand: { x: 360, z: 200, name: 'Taxi Stand' },
     taxiStand2: { x: 200, z: 360, name: 'Taxi Stand' },
     taxiStand3: { x: 520, z: 120, name: 'Taxi Stand' },
+    armory: { x: 228, z: 164, name: "Marin's Armory" },
+    musicstore: { x: 395, z: 166, name: 'Vinyl Bay Records' },
+    recordrow: { x: 395, z: 190, name: 'Record Row' },
   };
   // Race checkpoints ring the harbor and the beach.
   const racePoints = [

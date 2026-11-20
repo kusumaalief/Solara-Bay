@@ -45,6 +45,16 @@ export function weightedPick(random, entries) {
   return entries[entries.length - 1][1];
 }
 
+// v3: small helpers the armory district uses — a whole-number range (for
+// rack slots, crates and market stalls) and a plain probability roll.
+export function intRange(random, min, max) {
+  return min + Math.floor(random() * (max - min + 1));
+}
+
+export function chance(random, p) {
+  return random() < p;
+}
+
 export function nextId(random) {
   return Math.floor(random() * 1e9);
 }

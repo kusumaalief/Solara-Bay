@@ -1,9 +1,11 @@
-// Procedural sound for Solara Bay v2: no audio files, no network.
+// Procedural sound for Solara Bay v3: no audio files, no network.
 // Everything is a WebAudio oscillator or filtered noise burst, started only
 // after the player's first gesture, so a silent page never throws. v2 adds
 // a looping bass-and-arpeggio music groove, an engine hum that follows the
 // car's speed, a car horn, and distinct sounds for coins, taxi fares and
-// the race countdown.
+// the race countdown. v3 adds a different gunshot for each gun (pistol
+// crack, shotgun boom, rifle snap), plus buy and reload sounds for the
+// armory.
 export function createAudio() {
   let context = null;
   let muted = false;
@@ -114,7 +116,13 @@ export function createAudio() {
     toggleMute() { muted = !muted; if (muted) stopMusic(); else startMusic(); return muted; },
     isMuted() { return muted; },
     toggleMusic() { musicOn = !musicOn; if (musicOn) startMusic(); else stopMusic(); return musicOn; },
-    shoot() { noise(0.09, 0.14); tone(180, 0.08, 'square', 0.05, 60); },
+    shoot(weapon) {
+      if (weapon === 'shotgun') { noise(0.28, 0.24); tone(120, 0.22, 'square', 0.09, 45); }
+      else if (weapon === 'rifle') { noise(0.07, 0.13); tone(320, 0.06, 'square', 0.06, 90); tone(1400, 0.04, 'sine', 0.04); }
+      else { noise(0.09, 0.14); tone(180, 0.08, 'square', 0.05, 60); }
+    },
+    buy() { tone(880, 0.09, 'sine', 0.08); tone(1174, 0.09, 'sine', 0.08, null, 0.09); tone(1568, 0.18, 'sine', 0.08, null, 0.18); },
+    reload() { tone(500, 0.05, 'square', 0.05); tone(340, 0.05, 'square', 0.05, null, 0.18); tone(660, 0.07, 'square', 0.05, null, 0.36); },
     punch() { noise(0.06, 0.08); },
     pickup() { tone(660, 0.1, 'sine', 0.08); tone(990, 0.14, 'sine', 0.07); },
     coin() { tone(1318, 0.08, 'sine', 0.07); tone(1760, 0.16, 'sine', 0.06); },

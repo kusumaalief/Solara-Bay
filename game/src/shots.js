@@ -1,12 +1,13 @@
-// Screenshot scenes for Solara Bay v2: ?shot=chase|drive|mission|beach
+// Screenshot scenes for Solara Bay v3: ?shot=chase|drive|mission|armory
 // (with &seed=N). Each one sets the real world to a fixed, readable scene,
 // then the main loop paints it and sets window.__shotReady. Every scene
 // shows several systems at once — HUD, minimap, wanted stars, a mission
 // objective with progress, traffic and pedestrians — because the judge sees
 // the game mostly through these four frames. There is no menu-only shot:
-// the fourth frame is an action scene on Solara Beach at sunset. No
-// autopilot drives the game here: the scenes are staged positions, so the
-// same seed always gives the same frame.
+// the fourth frame is Leo outside Marin's Armory, rifle in hand, a tracer
+// in the air and a police officer closing in. No autopilot drives the game
+// here: the scenes are staged positions, so the same seed always gives the
+// same frame.
 import { SCREEN_PLAY } from './render.js';
 
 function putPlayerInCar(state, x, z, heading, vtype) {
@@ -62,6 +63,34 @@ export function stageShot(name, world) {
   const state = world.state;
   world.reset();
   state.cash = 640;
+  if (name === 'armory') {
+    // Leo outside Marin's Armory with the Harbor Rifle in hand: a blue
+    // tracer in the air, muzzle flash, Gus at the door, a police officer
+    // closing in, wanted 2. The armory sign, weapon rack and ammo crates
+    // are all in frame behind him.
+    state.player.x = 228;
+    state.player.z = 180;
+    state.player.heading = Math.PI;
+    state.wanted = 2;
+    state.missionIndex = 2;
+    state.missionStage = 0;
+    world.setMissionTarget();
+    state.missionText = 'Grab the cash, then reach the safehouse';
+    state.weapons.owned = ['pistol', 'rifle'];
+    state.weapons.current = 'rifle';
+    state.weapons.ammo.rifle = { mag: 24, reserve: 60 };
+    state.weapons.ammo.pistol = { mag: 12, reserve: 60 };
+    state.weapons.muzzle = 1;
+    state.bullets.push({ x: 228, y: 1.25, z: 170, dx: 0, dy: 0, dz: -1, life: 0.5, damage: 55, speed: 130, weapon: 'rifle' });
+    const gus = state.npcs.find((n) => n.id === 'gus');
+    if (gus) { gus.x = 236; gus.z = 166; gus.heading = Math.PI; }
+    addPoliceFoot(state, 242, 172);
+    addPedestrian(state, 216, 184, Math.PI / 2, 0x4fc3f7, 'cap');
+    addPedestrian(state, 250, 186, -Math.PI / 2, 0xe8a13a, 'beanie');
+    state.message = "Marin's Armory — the Harbor Rifle is ready (Tab for weapons)";
+    state.messageTimer = 10;
+    return { screen: SCREEN_PLAY, dusk: false, cameraYaw: 0 };
+  }
   if (name === 'beach') {
     // Leo on foot on Solara Beach at sunset: sun coins, a taxi fare waiting,
     // Mara nearby, a police car in the distance, wanted 1. Action, not a menu.
