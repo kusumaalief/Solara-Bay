@@ -1,21 +1,24 @@
-// Solara Bay v4 — a working gta6-01 entry (Node 22, standard library only).
+// Solara Bay v5 — a working gta6-01 entry (Node 22, standard library only).
 // The game is this directory's game/ folder: plain static files a desktop
 // browser loads offline (game/index.html, its ES modules and the vendored
 // Three.js build under game/vendor/, no library from a CDN and no network
-// request). Three small JPEG textures under game/textures/ (48 KB total,
-// downscaled from a free-to-use city street pack) are used as storefront
-// facades and a billboard. v4 adds two real low-poly car models under
-// game/models/ (car1.glb, car2.glb, 880 KB total, converted from a
-// free-to-use low-poly cars pack) with their PNG textures in game/textures/:
-// Leo's orange Comet 01 (every sedan) and the police Interceptor (every
-// police car), with spinning and steering wheels and a flashing light bar.
-// It is a 3D blocky open-world crime game in the
-// spirit of GTA 6: a city to explore on foot and by car, traffic and
-// pedestrians, cars to steal, a wanted level with police, five story
-// missions and a story, a taxi side activity and beach collectibles, combat
-// with three buyable guns from Marin's Armory, a HUD with a minimap, a
-// start screen, a pause menu and a save. This program hands it in: it copies
-// game/ and screenshots/ from beside this file to /output and writes
+// request). Three small JPEG textures under game/textures/ (downscaled
+// from a free-to-use city street pack) are used as storefront facades and
+// a billboard. Two real low-poly car models under game/models/
+// (car1.glb, car2.glb, converted from a free-to-use low-poly cars pack)
+// with their PNG textures in game/textures/: Leo's orange Comet 01
+// (every sedan) and the police Interceptor (every police car), with
+// spinning and steering wheels and a flashing light bar. v5 rewrites the
+// whole game from scratch in its own code: the GLB files are loaded by a
+// new minimal loader written for the game (game/src/glb.js), so no
+// third-party loader code is copied into the repo.
+// It is a 3D blocky open-world crime game in the spirit of GTA 6: a city
+// to explore on foot and by car, traffic and pedestrians, cars to steal,
+// a wanted level with police, five story missions and a story, a taxi
+// side activity and beach collectibles, combat with three buyable guns
+// from Marin's Armory, a HUD with a minimap, a start screen, a pause
+// menu and a save. This program hands it in: it copies game/ and
+// screenshots/ from beside this file to /output and writes
 // /output/dossier.json, the summary the judge reads, with the vendored
 // make.fun library. Before writing the dossier it checks the screenshots
 // the scorer will check (3 to 4 files, each at most 256 KiB) and refuses
@@ -46,7 +49,7 @@ for (const f of shotFiles) {
   const size = statSync(join(shotDir, f)).size;
   if (size > 262144) throw new Error(`screenshot ${f} is ${size} bytes, over the 256 KiB cap`);
 }
-// v4: the two real car models must be in game/ or the entry would hand in
+// The two real car models must be in game/ or the entry would hand in
 // blocky stand-ins — fail loudly here instead of at grading time.
 for (const model of ['models/car1.glb', 'models/car2.glb']) {
   if (!existsSync(join(here, 'game', model))) throw new Error(`missing car model game/${model}`);

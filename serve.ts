@@ -2,13 +2,10 @@
 // locally without a build step: `node serve.ts` serves game/ on http://localhost:8080.
 // It sends the MIME types a browser game needs, refuses any path outside game/, and otherwise
 // does nothing clever: this is a development convenience, not a web server for the internet.
-// v2 adds: a /health endpoint for play-test scripts, HEAD support, request
-// logging to stderr, and security headers (no MIME sniffing, no framing).
-// v3 adds: a version header on every response, and /health now reports the
-// game version and how many texture files are being served.
-// v4 adds: /health also reports how many car models are served, and the
-// texture count now includes the PNG car textures (the .glb MIME type was
-// already there).
+// It also has a /health endpoint for play-test scripts, HEAD support, request
+// logging to stderr, security headers (no MIME sniffing, no framing), a
+// version header on every response, and /health reports the game version
+// plus how many texture files and car models are being served.
 // Usage: node serve.ts [--port 8080]
 import { createReadStream, readdirSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -46,16 +43,22 @@ const MIME: Record<string, string> = {
 };
 
 const startedAt = Date.now();
-const GAME_VERSION = 'solara-bay-v4';
+const GAME_VERSION = 'solara-bay-v5';
+
+function countFiles(dir: string, suffixes: string[]): number {
+  try {
+    return readdirSync(join(root, dir)).filter((f) => suffixes.some((s) => f.endsWith(s))).length;
+  } catch {
+    return 0;
+  }
+}
 
 function textureCount() {
-  try { return readdirSync(join(root, 'textures')).filter((f) => f.endsWith('.jpg') || f.endsWith('.png')).length; }
-  catch { return 0; }
+  return countFiles('textures', ['.jpg', '.png']);
 }
 
 function modelCount() {
-  try { return readdirSync(join(root, 'models')).filter((f) => f.endsWith('.glb')).length; }
-  catch { return 0; }
+  return countFiles('models', ['.glb']);
 }
 
 createServer((request, response) => {

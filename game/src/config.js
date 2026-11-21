@@ -1,20 +1,20 @@
-// Solara Bay v2 — every tuning number and colour in one place.
-// The world is 640 by 480 units on the ground plane (x east, z south, y up).
-// Roads run on an 80-unit grid; blocks between them hold blocky buildings.
-// A blocky avatar is about 1.8 units tall; a blocky car is about 4.4 long.
-// v3 adds: Marin's Armory (a gun shop run by Gus Ferraro) with three
-// buyable guns, a music store and a new tower district inspired by the
-// free-to-use city street pack, and a Record Row plaza.
-// v4 adds: real low-poly car models — the Comet 01 (Leo's car, every
-// stealable sedan) and the Interceptor (every police car), converted from
-// the free-to-use low-poly cars pack the entrant supplied. CAR_MODELS
-// holds their file paths, HUD labels and the wheel/light geometry the
-// renderer needs; the GLBs live under game/models/, the PNG textures
-// under game/textures/.
+// Solara Bay — every tuning number, colour and story beat in one file.
+// The island is 640 by 480 units (x east, z south, y up). Streets sit on
+// an 80-unit grid, 14 units wide; the blocks between them hold the
+// buildings. Leo is about 1.8 units tall; a sedan is about 4.6 long.
+// The three guns, the two real car models, the five missions and the
+// named places all live here so the simulation and the renderer agree
+// on them without duplicating numbers.
+
 export const WORLD = { width: 640, height: 480 };
 export const STEP = 1 / 60;
 export const SAVE_KEY = 'solara-bay-3d.save.v3';
+export const CITY_NAME = 'Solara Bay';
+export const HERO_NAME = 'Leo Marin';
+export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
 
+// Leo on foot: how fast he walks and runs, how high he jumps, how much
+// punishment he takes, and how hard his fists and his bullets hit.
 export const PLAYER = {
   height: 1.8,
   walkSpeed: 8,
@@ -26,14 +26,60 @@ export const PLAYER = {
   fireCooldown: 0.22,
 };
 
-// Marin's Armory: three original guns. Price, damage, fire rate, range,
-// magazine and ammo are all different on purpose — the pistol is cheap
-// and steady, the shotgun hits hard up close, the rifle is fast and far.
+// Marin's Armory, run by Gus Ferraro. Three original guns, each with a
+// different personality: the pistol is cheap and steady, the shotgun
+// throws five pellets up close, the rifle is fast and reaches far.
+// price is cash, damage is per pellet, fireRate is seconds between
+// shots, range is metres, magSize is the magazine, reserveAmmo is the
+// starter reserve, reloadTime is seconds, spread is radians of scatter.
 export const WEAPONS = {
-  pistol: { label: 'Bay Pistol', price: 150, damage: 30, fireRate: 0.25, range: 55, magSize: 12, reserveAmmo: 60, reloadTime: 1.0, pellets: 1, spread: 0.02, bulletSpeed: 80, tracer: 0xffe14d, blurb: 'Cheap, steady, always there for you.' },
-  shotgun: { label: 'Boomstick', price: 400, damage: 18, fireRate: 0.9, range: 30, magSize: 6, reserveAmmo: 24, reloadTime: 1.6, pellets: 5, spread: 0.09, bulletSpeed: 60, tracer: 0xff9e3a, blurb: 'Five pellets of close-range persuasion.' },
-  rifle: { label: 'Harbor Rifle', price: 700, damage: 55, fireRate: 0.14, range: 110, magSize: 30, reserveAmmo: 90, reloadTime: 1.4, pellets: 1, spread: 0.008, bulletSpeed: 130, tracer: 0x7ad7ff, blurb: 'Fast, far, and very loud.' },
+  pistol: {
+    label: 'Bay Pistol',
+    blurb: 'Cheap, steady, always there for you.',
+    price: 150,
+    damage: 30,
+    pellets: 1,
+    spread: 0.02,
+    fireRate: 0.25,
+    range: 55,
+    bulletSpeed: 80,
+    magSize: 12,
+    reserveAmmo: 60,
+    reloadTime: 1.0,
+    tracer: 0xffe14d,
+  },
+  shotgun: {
+    label: 'Boomstick',
+    blurb: 'Five pellets of close-range persuasion.',
+    price: 400,
+    damage: 18,
+    pellets: 5,
+    spread: 0.09,
+    fireRate: 0.9,
+    range: 30,
+    bulletSpeed: 60,
+    magSize: 6,
+    reserveAmmo: 24,
+    reloadTime: 1.6,
+    tracer: 0xff9e3a,
+  },
+  rifle: {
+    label: 'Harbor Rifle',
+    blurb: 'Fast, far, and very loud.',
+    price: 700,
+    damage: 55,
+    pellets: 1,
+    spread: 0.008,
+    fireRate: 0.14,
+    range: 110,
+    bulletSpeed: 130,
+    magSize: 30,
+    reserveAmmo: 90,
+    reloadTime: 1.4,
+    tracer: 0x7ad7ff,
+  },
 };
+
 export const ARMORY = {
   name: "Marin's Armory",
   keeper: 'Gus Ferraro',
@@ -42,28 +88,86 @@ export const ARMORY = {
   blurb: 'Gus Ferraro sells hardware to anyone with cash and a steady hand.',
 };
 
-// Real car models (v4): which GLB/texture each model uses, what the HUD
-// calls it, the wheel radius the renderer spins the wheels by, where the
-// headlight blocks sit at the front, and (police only) how high the roof
-// light bar sits. The GLBs are baked at the game's 4.6-unit sedan length
-// with the wheels touching y=0 and the front at +Z, so they drop straight
-// into the existing car slots — stats and handling stay in VEHICLES.
+// The two real low-poly cars, converted from the free-to-use cars pack
+// the entrant supplied. The GLBs are baked at the game's 4.6-unit sedan
+// length with the wheels on y=0 and the hood at +Z; wheelRadius is what
+// the renderer spins the wheels by, headlightY is where the lamp blocks
+// sit, lightBarY (police only) is the roof bar's height.
 export const CAR_MODELS = {
-  comet: { label: 'Comet 01', glb: 'models/car1.glb', texture: 'textures/car-1.png', wheelRadius: 0.36, headlightY: 0.55 },
-  police: { label: 'Interceptor', glb: 'models/car2.glb', texture: 'textures/car-2.png', wheelRadius: 0.37, headlightY: 0.6, lightBarY: 1.78 },
+  comet: {
+    label: 'Comet 01',
+    glb: 'models/car1.glb',
+    texture: 'textures/car-1.png',
+    wheelRadius: 0.36,
+    headlightY: 0.55,
+  },
+  police: {
+    label: 'Interceptor',
+    glb: 'models/car2.glb',
+    texture: 'textures/car-2.png',
+    wheelRadius: 0.37,
+    headlightY: 0.6,
+    lightBarY: 1.78,
+  },
 };
 
-// Vehicle types: every drivable car in the city uses one of these rows, so a
-// sports car, a truck and a motorcycle genuinely feel different from a sedan.
+// Four drivable kinds, each with its own feel: the sports car is quick
+// but fragile, the truck is slow and tough, the bike is nimble.
 export const VEHICLES = {
-  sedan: { label: 'Sedan', accel: 22, brake: 34, drag: 3, maxSpeed: 38, reverseMax: 12, steer: 1.9, length: 4.6, width: 2.1, toughness: 1 },
-  sports: { label: 'Sports car', accel: 32, brake: 40, drag: 2.2, maxSpeed: 50, reverseMax: 14, steer: 2.4, length: 4.4, width: 2.0, toughness: 0.8 },
-  truck: { label: 'Truck', accel: 15, brake: 28, drag: 2.5, maxSpeed: 30, reverseMax: 10, steer: 1.4, length: 5.6, width: 2.3, toughness: 2 },
-  bike: { label: 'Motorcycle', accel: 28, brake: 38, drag: 1.8, maxSpeed: 46, reverseMax: 8, steer: 3.1, length: 2.6, width: 1.0, toughness: 0.6 },
+  sedan: {
+    label: 'Sedan',
+    length: 4.6,
+    width: 2.1,
+    accel: 22,
+    brake: 34,
+    drag: 3,
+    maxSpeed: 38,
+    reverseMax: 12,
+    steer: 1.9,
+    toughness: 1,
+  },
+  sports: {
+    label: 'Sports car',
+    length: 4.4,
+    width: 2.0,
+    accel: 32,
+    brake: 40,
+    drag: 2.2,
+    maxSpeed: 50,
+    reverseMax: 14,
+    steer: 2.4,
+    toughness: 0.8,
+  },
+  truck: {
+    label: 'Truck',
+    length: 5.6,
+    width: 2.3,
+    accel: 15,
+    brake: 28,
+    drag: 2.5,
+    maxSpeed: 30,
+    reverseMax: 10,
+    steer: 1.4,
+    toughness: 2,
+  },
+  bike: {
+    label: 'Motorcycle',
+    length: 2.6,
+    width: 1.0,
+    accel: 28,
+    brake: 38,
+    drag: 1.8,
+    maxSpeed: 46,
+    reverseMax: 8,
+    steer: 3.1,
+    toughness: 0.6,
+  },
 };
-// Backwards-compatible defaults: the sedan row is the old CAR tuning.
 export const CAR = { ...VEHICLES.sedan };
 
+// The heat: how many police cars may hunt at once, how fast they chase,
+// how close a foot officer must get to arrest Leo, and how far away a
+// unit must spawn. The wanted level only cools while no unit can see Leo.
 export const POLICE = {
   maxCars: 5,
   chaseSpeed: 34,
@@ -71,19 +175,27 @@ export const POLICE = {
   arrestRange: 2.2,
   arrestTime: 1.6,
   spawnDistance: 90,
-  // Wanted only cools off while no police unit is close enough to see Leo.
   hiddenDistance: 70,
 };
 
 export const WANTED = { decaySeconds: 24, max: 5 };
 
-// Cash unlocks: spend nothing, just earn it — new toys appear as Leo's
-// reputation (and wallet) grows.
+// Earned, not bought: hit the cash mark and the reward appears.
 export const UNLOCKS = [
-  { cash: 600, id: 'sports', label: 'Sports car unlocked — a red Comet is parked at the Harbor Garage' },
-  { cash: 1200, id: 'beach', label: 'Beach House unlocked — the sunset cabana on Solara Beach is yours' },
+  {
+    cash: 600,
+    id: 'sports',
+    label: 'Sports car unlocked — a red Comet is parked at the Harbor Garage',
+  },
+  {
+    cash: 1200,
+    id: 'beach',
+    label: 'Beach House unlocked — the sunset cabana on Solara Beach is yours',
+  },
 ];
 
+// Leo's story, in order. drops is how many courier stops, checkpoints
+// is how many race gates, timeLimit is the race clock in seconds.
 export const MISSIONS = [
   {
     id: 'borrowed-wheels',
@@ -130,12 +242,11 @@ export const MISSIONS = [
   },
 ];
 
-// Taxi side activity: after the heist, fares wait at the taxi stands.
+// After the heist, fares wait at the taxi stands; sun coins hide on the beach.
 export const TAXI = { fareMin: 60, fareMax: 120, stands: 3 };
-// Beach collectibles: sun coins hidden along Solara Beach.
 export const COLLECTIBLES = { count: 8, value: 25 };
 
-// Named characters: distinct blocky looks — outfit, skin, height, hat.
+// The named cast: outfit colours, skin, height and hat per person.
 export const CHARACTERS = {
   leo: { name: 'Leo Marin', shirt: 0xf2c94c, pants: 0x2b4acb, skin: 0xf2c48a, height: 1.0, hat: null, hair: 0x2a1a12 },
   mara: { name: 'Mara Voss', shirt: 0xc94b6b, pants: 0x22242c, skin: 0xe8b07a, height: 0.96, hat: 'cap', hair: 0x111111 },
@@ -143,7 +254,9 @@ export const CHARACTERS = {
   reyes: { name: 'Officer Reyes', shirt: 0x1a2a6b, pants: 0x1a2a6b, skin: 0xf2c48a, height: 1.02, hat: 'police', hair: 0x2a1a12 },
   gus: { name: 'Gus Ferraro', shirt: 0x5a3a1a, pants: 0x2b2b33, skin: 0xd9a05a, height: 1.08, hat: 'fedora', hair: 0x888888 },
 };
-// Crowd variety: pedestrian outfits, heights and hats are picked from these.
+
+// The crowd's wardrobe: pedestrians pick a shirt, trousers, skin tone,
+// height and (sometimes) a hat from these.
 export const CROWD = {
   shirts: [0xe5534b, 0x4fc3f7, 0x7ab648, 0xe8a13a, 0x9a7ab8, 0xf2f2f2, 0x2b6b8a, 0xc9a13a],
   pants: [0x333344, 0x2b4acb, 0x4a3a2a, 0x5a5a6b, 0x1e5c2e],
@@ -152,6 +265,7 @@ export const CROWD = {
   hats: [null, null, null, 'cap', 'cap', 'beanie', 'fedora'],
 };
 
+// The look of the place, as hex colours.
 export const PALETTE = {
   sky: 0x8fc3ea,
   sunset: 0xff9e5e,
@@ -187,7 +301,3 @@ export const PALETTE = {
   kiosk: 0xe5534b,
   foodCart: 0xff9e3a,
 };
-
-export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
-export const CITY_NAME = 'Solara Bay';
-export const HERO_NAME = 'Leo Marin';
